@@ -1,0 +1,5 @@
+# 片头/前贴广告：shouldUseFronAds() 返回 true 会短路掉广告位，使其永不被排入。
+repl("dist.app/main/*.js",
+     "shouldUseFronAds(t){return!1}",
+     "shouldUseFronAds(t){return!0}",
+     "front/pre-roll ads off")

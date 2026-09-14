@@ -1,0 +1,6 @@
+# 播放器下方的下载按钮：绕过 downloadVideo() 里「下载功能仅对VIP用户开放」的判断
+# （它检查 user?.token?.gid）。
+repl("dist.app/main/*.js",
+     'if(!(null===(e=null===(t=this.user)||void 0===t?void 0:t.token)||void 0===e?void 0:e.gid))return this._toastService.showBlackToast',
+     'if(!1)return this._toastService.showBlackToast',
+     "video download button VIP gate -> bypass")

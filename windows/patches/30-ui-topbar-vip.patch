@@ -1,0 +1,12 @@
+# 顶栏「VIP{n}折」优惠按钮（一个 <app-dn-user-menu-item>，其 [item] 是 rechargeMenuItem）。
+# 分两步：
+#   1. 把 discountList 保持为空，让优惠角标的 *ngIf 永不填充；
+#   2. 隐藏按钮宿主元素。app-dn-user-menu-item.top-item.mx-2 在整个 bundle 中唯一（登录/帮助
+#      等顶栏项都不带 .mx-2），所以只会命中这一个。
+repl("dist.app/main/*.js",
+     "this.discountList=t.state.discountInfo,this.rechargeInfo=t.state.rechargeInfo",
+     "this.discountList=[],this.rechargeInfo=t.state.rechargeInfo",
+     "top-bar VIP discount list -> empty")
+
+inject_css("app-dn-user-menu-item.top-item.mx-2{display:none!important}",
+           "hide top-bar VIP discount button")

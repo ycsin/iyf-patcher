@@ -1,0 +1,17 @@
+# 移除 VIP 商店：把那些唯一职责就是 startActivity 打开 VipActivity 的伴生 launcher 方法置空。
+# 凡是 VipActivity$* 伴生类里、带 startActivity 的 (Context)V 方法，都改成空的 return-void。
+def noop_context_launchers(txt):
+    pat = re.compile(r'(?ms)^\.method\b[^\n]*\([^\n]*Landroid/content/Context;\)V\n.*?^\.end method[ \t]*$')
+    out, last, changed = [], 0, 0
+    for m in pat.finditer(txt):
+        out.append(txt[last:m.start()]); last = m.end(); block = m.group(0)
+        if "startActivity" in block:
+            out.append(block.split("\n", 1)[0] + "\n    .locals 0\n\n    return-void\n.end method")
+            changed += 1
+        else:
+            out.append(block)
+    out.append(txt[last:])
+    return "".join(out), changed
+
+apply_over(noop_context_launchers, only="smali*/**/VipActivity$*.smali",
+           label="VIP store launcher -> no-op")

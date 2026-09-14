@@ -1,0 +1,6 @@
+# 按功能权限的判断：_permission.isValid(x){...permissionList...} -> 返回 true。
+# 解锁受权限控制的功能（2倍速、VIP 表情、弹幕颜色、投票、「权限限制」提示页等）。
+repl_re("dist.app/main/*.js",
+        r"isValid\(([a-z])\)\{[^{}]*permissionList[^{}]*\}",
+        r"isValid(\1){return!0}",
+        "VIP permissions -> all valid (full unlock)")

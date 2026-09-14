@@ -1,0 +1,37 @@
+# 新增设置项：「关闭时退出程序（不最小化到托盘）」。
+# 开启后，在 Windows 上窗口 ✕ 会真正退出，而不是缩小到托盘。默认关闭 = 原行为
+# （✕ 缩到托盘；退出走托盘菜单的「退出」）。
+# 改动的是可读的主进程文件 main.js / globalconfig.js（不是打包后的 bundle）。
+# 设置窗口（config.html）是数据驱动的，所以只要往 schema 加一行就能渲染出复选框，无需改 HTML。
+
+# 1) config 模型默认值（启动时从已存配置合并，因此选择会被记住）
+repl("globalconfig.js",
+     "    this.isDohv2Enabled = false;",
+     "    this.isDohv2Enabled = false;\n    this.quitOnClose = false;",
+     "globalconfig: quitOnClose default field")
+
+# 2) 在设置 schema 里加一个复选框，放在 DoH 开关后面
+repl("globalconfig.js",
+     '        type: "checkbox",\n        key: "isDohv2Enabled"\n      },',
+     '        type: "checkbox",\n        key: "isDohv2Enabled"\n      },\n'
+     '      {\n'
+     '        name: "关闭时退出程序（不最小化到托盘）",\n'
+     '        value: this.quitOnClose,\n'
+     '        type: "checkbox",\n'
+     '        key: "quitOnClose"\n'
+     '      },',
+     "globalconfig: quitOnClose settings row")
+
+# 3) 在 configChange 里处理这个切换（照搬 DoH 复选框的做法；立即落盘）
+repl("main.js",
+     '        case "isDohv2Enabled":\n            config.isDohv2Enabled = !config.isDohv2Enabled;\n            onOffDoh(config.isDohv2Enabled);\n            break;',
+     '        case "isDohv2Enabled":\n            config.isDohv2Enabled = !config.isDohv2Enabled;\n            onOffDoh(config.isDohv2Enabled);\n            break;\n'
+     '        case "quitOnClose":\n            config.quitOnClose = !config.quitOnClose;\n            config.saveConfig();\n            break;',
+     "main: configChange quitOnClose case")
+
+# 4) ✕ 处理逻辑：在 Windows 上，除非勾选了 quitOnClose，否则仍缩到托盘（勾选则关闭/退出）。
+#    用 (config && ...) 兜底，config 为空时回落到原行为。
+repl("main.js",
+     "                if (isWin) {\n                    // mainWindow.hide();\n                    runningChildWindow.mainChild.hide();",
+     "                if (isWin && !(config && config.quitOnClose)) {\n                    // mainWindow.hide();\n                    runningChildWindow.mainChild.hide();",
+     "main: close button respects quitOnClose")

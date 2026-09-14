@@ -1,0 +1,22 @@
+# 用户状态构造：强制为一个「生效中的最高档 VIP」，让状态/到期/2倍速判断正确
+# （daysOfMembership>0、roleId=3），并把任何 JWT 派生的 token.gid 强制为 3
+# （下载面板和高清选择器读取 user.token.gid）。
+repl("dist.app/main/*.js",
+     "e.roleId=t.GID,e.daysOfMembership=0,",
+     "e.roleId=3,e.daysOfMembership=9999,",
+     "user-state A: roleId=3 + daysOfMembership=9999")
+
+repl("dist.app/main/*.js",
+     "e.daysOfMembership=t.endDays,",
+     "e.daysOfMembership=9999,",
+     "user-state B: daysOfMembership=9999")
+
+repl("dist.app/main/*.js",
+     "e.roleId=t.gid,e.lastLogin",
+     "e.roleId=3,e.lastLogin",
+     "user-state B: roleId=3")
+
+repl_re("dist.app/main/*.js",
+        r"(\.token\.gid=)(?![0-9])[A-Za-z_$][\w.]*",
+        r"\g<1>3",
+        "token.gid assignments -> 3")

@@ -1,0 +1,11 @@
+# 会员标识/字符串 -> royalVip（最高档），走计算它的那两条代码路径。force_method 只改真正处理
+# "royalVip" 值的变体（跳过缺少 "royalVip" 的图标索引变体）；对返回 void 的方法用赋值形式
+# （this.membership=）。
+force_method("dist.app/main/*.js", "getUserRoleFromImage",
+             lambda a, b: 'return"royalVip"' if 'royalVip' in b else None,
+             "user role/membership -> royalVip")
+
+force_method("dist.app/main/*.js", "getMembership",
+             (lambda a, b: None if 'royalVip' not in b
+              else ('this.membership="royalVip"' if 'this.membership=' in b else 'return"royalVip"')),
+             "getMembership -> royalVip (top tier)")

@@ -1,0 +1,46 @@
+# 移除首页的跳转/广告卡片。它们点开的是一个网页（mediaUrl 非空），而不是视频；每个 row/banner
+# 委托都读 RowModel.getRowsItem()，所以在这里过滤掉「跳转型」的 VideoModel 就覆盖了整个首页。
+# 非 VideoModel 的项原样放行。
+VMD = "Lcom/ppde/android/tv/fragment/model/VideoModel;"
+_getrows = re.compile(
+    r'\.method public final getRowsItem\(\)Ljava/util/List;\n'
+    r'.*?iget-object v\d+, p0, (L[^;]+;->[A-Za-z0-9_$]+:Ljava/util/List;)'
+    r'.*?\.end method', re.S)
+
+def _mk_getrows(m):
+    field = m.group(1)
+    return "\n".join([
+        ".method public final getRowsItem()Ljava/util/List;",
+        "    .locals 4",
+        "    iget-object v1, p0, " + field,
+        "    new-instance v0, Ljava/util/ArrayList;",
+        "    invoke-direct {v0}, Ljava/util/ArrayList;-><init>()V",
+        "    if-eqz v1, :vp_done",
+        "    invoke-interface {v1}, Ljava/util/List;->iterator()Ljava/util/Iterator;",
+        "    move-result-object v1",
+        "    :vp_loop",
+        "    invoke-interface {v1}, Ljava/util/Iterator;->hasNext()Z",
+        "    move-result v2",
+        "    if-eqz v2, :vp_done",
+        "    invoke-interface {v1}, Ljava/util/Iterator;->next()Ljava/lang/Object;",
+        "    move-result-object v2",
+        "    instance-of v3, v2, " + VMD,
+        "    if-eqz v3, :vp_keep",
+        "    check-cast v2, " + VMD,
+        "    invoke-virtual {v2}, " + VMD + "->getMediaUrl()Ljava/lang/String;",
+        "    move-result-object v3",
+        "    if-eqz v3, :vp_keep",
+        "    invoke-interface {v3}, Ljava/lang/CharSequence;->length()I",
+        "    move-result v3",
+        "    if-nez v3, :vp_loop",
+        "    :vp_keep",
+        "    invoke-interface {v0, v2}, Ljava/util/List;->add(Ljava/lang/Object;)Z",
+        "    goto :vp_loop",
+        "    :vp_done",
+        "    return-object v0",
+        ".end method",
+    ])
+
+regex_patch(_getrows, _mk_getrows,
+            need=".method public final getRowsItem()Ljava/util/List;",
+            label="getRowsItem filters jump/ad cards")

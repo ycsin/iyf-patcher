@@ -1,0 +1,5 @@
+# 下载页/下载 tab 的判断：isUserVIP = !!store.GetSessionData("gid") -> true。
+repl("dist.app/main/*.js",
+     'isUserVIP=!!this._store.GetSessionData("gid")',
+     'isUserVIP=!0',
+     "download page isUserVIP -> true")

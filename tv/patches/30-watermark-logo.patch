@@ -1,0 +1,15 @@
+# 移除视频内的水印 logo。应用通过 setImageResource 在 ImageView 上切换
+# icon_normal_logo (0x7f0f0051) <-> icon_vip_logo (0x7f0f0076)；把 setImageResource(0x7f0f0051)
+# 的调用点改写成 setVisibility(GONE)，让 logo 永不显示（覆盖 fix-cover 路径 + 播放控制器 +
+# 任何将来的调用点）。
+_logo = re.compile(
+    r'(const(?:/\w+)? (v\d+|p\d+), 0x7f0f0051\n)'
+    r'((?:(?!->setImageResource|\.end method)[\s\S])*?)'
+    r'invoke-virtual \{(v\d+|p\d+), \2\}, Landroid/widget/ImageView;->setImageResource\(I\)V')
+
+def _logo_repl(m):
+    return m.group(1) + m.group(3) + (
+        "const/16 %s, 0x8\n\n    invoke-virtual {%s, %s}, Landroid/widget/ImageView;->setVisibility(I)V"
+        % (m.group(2), m.group(4), m.group(2)))
+
+regex_patch(_logo, _logo_repl, need="0x7f0f0051", label="watermark logo -> hidden")

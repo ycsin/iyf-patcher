@@ -1,0 +1,5 @@
+# 后台更新 / geo-IP 遥测：update() -> 空操作（不再拉取 github 配置，也不再向 ipapi.co 查 geo-IP）。
+resub("backgroundUpdate.js",
+      r"update\(\)\s*\{",
+      "update(){return;",
+      "backgroundUpdate/geo-IP -> no-op")

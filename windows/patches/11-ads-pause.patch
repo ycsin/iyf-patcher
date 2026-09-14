@@ -1,0 +1,5 @@
+# 暂停画面广告：暂停广告列表始终存为空。
+repl("dist.app/main/*.js",
+     "invokePauseList(t){this.pauseList=t}",
+     "invokePauseList(t){this.pauseList=[]}",
+     "pause ads off")

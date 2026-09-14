@@ -1,0 +1,19 @@
+# 抑制「VIP已跳过广告」横幅，但**保留**那个 d() 式的后续调用（它在跳过广告后继续播放；
+# 若把整个方法置空，播放器会卡住并退出）。把 vipSkipAdTip() 重建为「只调用那个后续 + return」，
+# 去掉 setTopTip 横幅。
+_skiptip = re.compile(
+    r'\.method public final vipSkipAdTip\(\)V\n'
+    r'.*?(invoke-direct \{p0\}, L[^;]+;->\w+\(\)V)'
+    r'.*?\.end method', re.S)
+
+def _skiptip_repl(m):
+    return "\n".join([
+        ".method public final vipSkipAdTip()V",
+        "    .locals 0",
+        "    " + m.group(1),
+        "    return-void",
+        ".end method",
+    ])
+
+regex_patch(_skiptip, _skiptip_repl, need="vipSkipAdTip(",
+            label="vipSkipAdTip -> banner suppressed, continuation kept")

@@ -1,0 +1,11 @@
+# 「我的」（我的）页：把「{日期} 到期」显示成「永不到期」。锚定在 ActivityMineBinding->tvVipEnd
+# 这个 TextView 上；把传给它 setText() 的 CharSequence 覆盖成常量字符串。
+_end = re.compile(
+    r'(iget-object (v\d+), v\d+, L[^;]*ActivityMineBinding;->tvVipEnd:L[^;]+;\n)'
+    r'((?:(?!->tvVipEnd:L|\.end method|iget-object \2,|Landroid/widget/TextView;->setText)[\s\S])*?)'
+    r'(invoke-virtual \{\2, (v\d+)\}, Landroid/widget/TextView;->setText\(Ljava/lang/CharSequence;\)V)')
+
+def _end_repl(m):
+    return m.group(1) + m.group(3) + ('const-string %s, "永不到期"\n\n    ' % m.group(5)) + m.group(4)
+
+regex_patch(_end, _end_repl, need="->tvVipEnd:", label="Mine expiry -> 永不到期")

@@ -1,0 +1,4 @@
+# 暂停画面广告横幅：getPauseAds() -> 空操作（应用从不对这条路径做 VIP 判断，返回 void 即无暂停广告）。
+def body_void(rt):
+    return "    .locals 0\n\n    return-void\n"
+method_patch("getPauseAds", body_void, need="getPauseAds()", label="getPauseAds -> no-op")

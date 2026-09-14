@@ -1,0 +1,7 @@
+# 下载清晰度选择（DownloadBoxDialogComponent.changeSharpness）：VIP 清晰度（720/1080/2160）
+# 受 this._helper.token.gid>0 限制，否则弹「您不是VIP，无法下载该清晰度的视频」。把条件强制为真。
+#   注意：这只解锁了客户端的选择器。某个高级清晰度文件是否真的会被下发，取决于后端（服务端天花板）。
+repl("dist.app/main/*.js",
+     'changeSharpness(t){!t.isVIP||this._helper.token.gid>0&&t.isVIP?',
+     'changeSharpness(t){!0?',
+     "download resolution VIP gate -> allow all clarities")

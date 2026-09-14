@@ -1,0 +1,6 @@
+# 横幅广告总开关。siteConfig.hideAds 同时驱动 getGgs()（广告块拉取）和 ngIf="!hideAds"
+# 的横幅容器。把它置为 true —— 应用便不再发出广告请求，所有横幅位也被隐藏。
+repl("dist.app/main/*.js",
+     "allVip:!1,hideAds:!1,",
+     "allVip:!1,hideAds:!0,",
+     "site config hideAds -> true (banner ads off)")

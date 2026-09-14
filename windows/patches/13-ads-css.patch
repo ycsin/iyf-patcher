@@ -1,0 +1,10 @@
+# 广告组件本身是 div.dabf。仅隐藏它会留下空容器，因为广告位的外层包裹元素仍占着预留空间
+# （固定高度 + 深色 #1c1d2f 背景）：
+#   .ps.pggf  = 视频页右侧广告栏（上下两个位）
+#   .ss-ctn   = 搜索页广告卡片（438x333）
+# 把组件和这两个包裹元素一起收起。
+inject_css(
+    "div.dabf,.dabf{display:none!important}\n"
+    ".ps.pggf{display:none!important}\n"
+    ".ss-ctn{display:none!important}",
+    "hide ad slots + empty containers")

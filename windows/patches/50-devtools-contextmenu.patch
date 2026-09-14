@@ -1,0 +1,49 @@
+# 通过设置项开启开发者工具：「启用开发者工具（右键检查）」。
+# 开启后（或用 --inspect 启动时），右键窗口会弹出菜单（检查元素 / 切换 DevTools / 复制 /
+# 粘贴 / 剪切 / 全选 / 刷新）。默认关闭。
+#
+# 监听器是**无条件注册**的，在右键那一刻读取当前设置值，所以在设置里一勾就立即生效（无需重启）。
+# Electron 本身没有默认右键菜单，所以关闭时右键什么也不做 —— 与原版一致。
+
+# 1) 注册右键菜单监听器（始终注册）；弹出与否由设置或 --inspect 控制
+resub("main.js",
+      r"(runningChildWindow\.mainChild = new BrowserWindow\(winConfigTemp\);)",
+      r"\g<1>try{mainWindow.webContents.on('context-menu',function(e,p){if(!(process.argv.includes('--inspect')||(config&&config.devToolsEnabled)))return;var M=require('electron').Menu;M.buildFromTemplate([{label:'Inspect element',click:function(){mainWindow.webContents.inspectElement(p.x,p.y)}},{label:'Toggle DevTools',click:function(){mainWindow.webContents.toggleDevTools()}},{type:'separator'},{role:'copy'},{role:'paste'},{role:'cut'},{role:'selectAll'},{type:'separator'},{label:'Reload',click:function(){mainWindow.webContents.reload()}}]).popup();});}catch(_e){}",
+      "context menu (Inspect/DevTools) — gated on setting or --inspect")
+
+# 2) config 模型上的默认值
+repl("globalconfig.js",
+     "    this.isDohv2Enabled = false;",
+     "    this.isDohv2Enabled = false;\n    this.devToolsEnabled = false;",
+     "globalconfig: devToolsEnabled default field")
+
+# 3) 设置项 schema 里的复选框（由 config.html 自动渲染）
+repl("globalconfig.js",
+     '        type: "checkbox",\n        key: "isDohv2Enabled"\n      },',
+     '        type: "checkbox",\n        key: "isDohv2Enabled"\n      },\n'
+     '      {\n'
+     '        name: "启用开发者工具（右键检查）",\n'
+     '        value: this.devToolsEnabled,\n'
+     '        type: "checkbox",\n'
+     '        key: "devToolsEnabled"\n'
+     '      },',
+     "globalconfig: devToolsEnabled settings row")
+
+# 4) configChange 里的分支（只切换 —— 仅存内存，故意不落盘）
+repl("main.js",
+     '        case "isDohv2Enabled":\n            config.isDohv2Enabled = !config.isDohv2Enabled;\n            onOffDoh(config.isDohv2Enabled);\n            break;',
+     '        case "isDohv2Enabled":\n            config.isDohv2Enabled = !config.isDohv2Enabled;\n            onOffDoh(config.isDohv2Enabled);\n            break;\n'
+     '        case "devToolsEnabled":\n            config.devToolsEnabled = !config.devToolsEnabled;\n            break;',
+     "main: configChange devToolsEnabled case (RAM-only)")
+
+# 5) 仅存内存：启动时不从已存配置中**恢复** devToolsEnabled（永远以 false 起步）
+repl("globalconfig.js",
+     'if (p != "updateUrl" && p != "none")',
+     'if (p != "updateUrl" && p != "none" && p != "devToolsEnabled")',
+     "globalconfig: devToolsEnabled not restored from disk")
+
+# 6) 仅存内存：也不把 devToolsEnabled **写入**磁盘（落盘前从对象里剔除）
+repl("globalconfig.js",
+     '    serverStore.set("globalConfig", this);',
+     '    var _c = Object.assign({}, this); delete _c.devToolsEnabled; serverStore.set("globalConfig", _c);',
+     "globalconfig: devToolsEnabled stripped from saved config")

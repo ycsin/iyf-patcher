@@ -1,0 +1,8 @@
+# 隐藏首页/顶栏的 VIP 按钮。单一咽喉点：HeaderViewModel.setVipAnim(p1) 收到按钮 View；
+# 把它改写为 setVisibility(GONE)，而不是把它动画显示出来。
+def body_hide_p1(rt):
+    return ("    .locals 1\n\n    const/16 v0, 0x8\n\n"
+            "    invoke-virtual {p1, v0}, Landroid/view/View;->setVisibility(I)V\n\n"
+            "    return-void\n")
+method_patch("setVipAnim", body_hide_p1, need="setVipAnim(",
+             label="setVipAnim -> hide top VIP button")

@@ -1,0 +1,13 @@
+# 隐藏「我的」（我的）页的「开通VIP」按钮。锚定在 binding 字段 ActivityMineBinding->openVip 上：
+# 把它设置点击监听的调用点改成 setVisibility(GONE)。负向前瞻把匹配范围限定在这一个 binding/view。
+_openvip = re.compile(
+    r'(iget-object (v\d+), v\d+, L[^;]*ActivityMineBinding;->openVip:L[^;]+;\n)'
+    r'((?:(?!setOnClickListener|->openVip:L|\.end method|iget-object \2,)[\s\S])*?)'
+    r'invoke-virtual \{\2, (v\d+)\}, Landroid/view/View;->setOnClickListener\(Landroid/view/View\$OnClickListener;\)V')
+
+def _mine_repl(m):
+    return m.group(1) + m.group(3) + (
+        "const/16 %s, 0x8\n\n    invoke-virtual {%s, %s}, Landroid/view/View;->setVisibility(I)V"
+        % (m.group(4), m.group(2), m.group(4)))
+
+regex_patch(_openvip, _mine_repl, need="->openVip:", label="Mine open-VIP button -> hidden")

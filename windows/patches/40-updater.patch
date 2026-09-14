@@ -1,0 +1,5 @@
+# 自动更新：checkForNewVersion() 立即回报「无更新」（不再向 app.anybound.vip 拉取/应用更新）。
+resub("updater.js",
+      r"checkForNewVersion\(callback\)\s*\{",
+      "checkForNewVersion(callback){if(callback)callback({ret:0,msg:'',hasNewVersion:false});return;",
+      "updater check -> no-op")
