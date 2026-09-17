@@ -10,6 +10,19 @@
 # =============================================================================
 import zipfile, sys, os, re, glob
 
+_TTY = sys.stdout.isatty()
+_TAGC = {"ok": "1;32", "done": "1;32", "warn": "1;33", "FAIL": "1;31", "info": "1;36"}
+
+
+def emit(msg=""):
+    """Like print, but colorizes a leading [ok]/[warn]/[FAIL]/[done]/[info] tag on a TTY."""
+    s = str(msg)
+    if _TTY:
+        m = re.match(r"\[(ok|warn|FAIL|done|info)\]", s)
+        if m:
+            s = f"\033[{_TAGC[m.group(1)]}m{m.group(0)}\033[0m{s[m.end():]}"
+    sys.stdout.write(s + "\n")
+
 
 def main(orig, dexdir, out):
     newdex = {}
@@ -21,7 +34,7 @@ def main(orig, dexdir, out):
         newdex[os.path.basename(p)] = data
     if not newdex:
         raise SystemExit(f"[FAIL] no dex in {dexdir}")
-    print("[info] dex: " + ", ".join(f"{k}({len(v)}B)" for k, v in sorted(newdex.items())))
+    emit("[info] dex: " + ", ".join(f"{k}({len(v)}B)" for k, v in sorted(newdex.items())))
 
     sig_re = re.compile(r'^META-INF/([^/]*\.(RSA|DSA|EC|SF)|MANIFEST\.MF)$', re.I)
     zin = zipfile.ZipFile(orig, "r")
@@ -42,8 +55,8 @@ def main(orig, dexdir, out):
         if name not in present:
             zout.writestr(name, data); replaced.append(name + " (new)")
     zin.close(); zout.close()
-    print(f"[ok] replaced={replaced} dropped={dropped} copied={copied}")
-    print(f"[ok] wrote {out} ({os.path.getsize(out)} bytes)")
+    emit(f"[ok] replaced={replaced} dropped={dropped} copied={copied}")
+    emit(f"[ok] wrote {out} ({os.path.getsize(out)} bytes)")
 
 
 if __name__ == "__main__":

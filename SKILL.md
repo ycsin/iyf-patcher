@@ -29,15 +29,18 @@ ad-free, full-VIP build of the 爱壹帆 clients from the stock APK / Windows in
 
 ```
 <repo root>/
+├── patch.py             # unified entry: detect OS → pick client → optional download → dispatch
 ├── README.md            # canonical doc (Chinese); helper API tables + current patch list
 ├── SKILL.md             # this file
 ├── tv/                  # Android TV client
-│   ├── patch.sh         # pipeline: deps → apktool decode → engine → assemble dex → repackage → sign
+│   ├── patch.py         # pipeline (Linux/macOS, pure Python)
+│   ├── patch.sh         # same pipeline in bash (Linux/macOS; auto-installs deps via apt on Debian/Ubuntu)
 │   ├── engine.py        # applies patches/*.patch to the decoded smali tree
 │   ├── repackage.py     # swaps the new dex back into the ORIGINAL apk
 │   └── patches/         # NN-name.patch, applied in filename order
 └── windows/             # Electron client
-    ├── patch.sh         # pipeline: deps → NSIS→app-64.7z→app.asar → engine → repack asar → zip
+    ├── patch.py         # pipeline (Linux/macOS, pure Python)
+    ├── patch.sh         # same pipeline in bash (Linux/macOS; auto-installs deps via apt on Debian/Ubuntu)
     ├── engine.py        # applies patches/*.patch to the extracted asar tree
     └── patches/         # NN-name.patch, applied in filename order
 ```
@@ -46,16 +49,39 @@ Read `README.md` first — it has the full helper API tables and the up-to-date 
 
 ## Run it
 
-```bash
-bash tv/patch.sh       <input.apk>              [output.apk]   # → signed patched APK
-bash windows/patch.sh  <iyf_Setup_x.y.z.exe>    [output.zip]   # → portable patched app (zip)
+**Unified entry** `patch.py` (runs on Linux/macOS; lets you pick the client, and can download the
+official build first):
 ```
+python patch.py                                # interactive: pick client → path/URL/Enter=download
+python patch.py windows --download             # download official Windows installer, then patch
+python patch.py tv      --download -o out.apk  # download official TV APK (v2.4.5), then patch
+python patch.py windows <local-file-or-URL> [-o out]
+python patch.py tv      <local-apk-or-URL>  [-o out]
+```
+Known official URLs live in `patch.py`'s `CLIENTS` map (download via stdlib `urllib`, no deps).
+Pinned versions: **Android TV client v2.4.5, Windows client v3.1.5**.
+Windows (v3.1.5) `https://app.anybound.vip/static/iyf/爱壹帆_Setup_3.1.5.exe` (Chinese name is
+percent-encoded automatically); TV (v2.4.5) `https://app.anybound.vip/data/attachment/1-1779820631.apk`.
+
+Or call a client's sub-patcher directly:
+```
+python tv/patch.py       <input.apk>            [output.apk]   # → signed patched APK
+python windows/patch.py  <iyf_Setup_x.y.z.exe>  [output.zip]   # → portable patched app (zip)
+```
+Or the bash equivalents (Linux/macOS; auto-install deps via apt on Debian/Ubuntu):
+```
+bash tv/patch.sh <input.apk> [output.apk]   ·   bash windows/patch.sh <installer.exe> [output.zip]
+```
+`patch.py` (root) dispatches to the sub `patch.py`; sub `patch.py` and `patch.sh` are two
+front-ends over the SAME `engine.py` + `patches/` — pick any.
 Windows build runs via `爱壹帆.exe`; add `--inspect` to force-enable DevTools/right-click.
 APK installs with `adb install -r`; the signing key is reused from `~/.vip_patch`.
 
-Requirements: `python3`, `bash`, `7z`; TV also needs `apktool`, `apksigner`, `zipalign`, a JDK;
-Windows also needs `node`/`npm` (`@electron/asar`). On Debian/Ubuntu `patch.sh` installs missing
-tools via `apt`; on other OSes install the equivalents and put them on `PATH`.
+Requirements (put tools on `PATH`): `python3`; patching the TV client also needs `apktool`,
+`apksigner`, `zipalign`, a JDK; patching the Windows client also needs `7z` (7-Zip) and
+`node`/`npm` (`@electron/asar`). `patch.py` finds tools via `shutil.which` and prints an install
+hint if one is missing — it does NOT auto-install (only `patch.sh` does, and only on Debian/Ubuntu
+via apt).
 
 ## How patches work
 
@@ -125,8 +151,7 @@ The Settings window is **data-driven** from `globalconfig.js`, so a new checkbox
 - **APK: never do a full apktool rebuild.** Both aapt1 AND aapt2 reject this app's `$`-named
   resources. The pipeline assembles only the dex (`apktool b` → `build/apk/classes*.dex`) and
   `repackage.py` swaps them into the original apk, keeping resources/.so byte-identical.
-- **Windows: no exe re-signing needed.** The asar integrity fuse
-  (`EnableEmbeddedAsarIntegrityValidation`) is OFF, so a repacked `app.asar` loads as-is.
+- **Windows: no exe re-signing needed** — a repacked `app.asar` loads as-is.
 - **TV VIP tiers are 1..3** — use `getVipLevel → 3` (9999 is out of range and won't render a badge).
 - **User model landmark:** find the smali class declaring `isGiveVip(` (not the obfuscated helper).
 - **Sandboxed agent environments** may refuse to run build/read commands; if a command is blocked,

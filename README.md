@@ -4,26 +4,53 @@
 
 ```
 iyf/
+├── patch.py            统一入口：识别系统 → 选客户端 → 可下载官方版 → 分发（跨平台）
 ├── tv/                 Android TV 客户端
-│   ├── patch.sh        流水线 — 装依赖、apktool 反编译、组装 dex、align、签名
+│   ├── patch.py        Python 流水线（Linux/macOS）
+│   ├── patch.sh        同一流水线的 bash 版（Linux/macOS；Debian/Ubuntu 自动装依赖）
 │   ├── engine.py       把 patches/*.patch 应用到反编译出的 smali
 │   ├── repackage.py    把新 dex 换回原始 apk
 │   └── patches/        每个功能点一个 *.patch（按文件名顺序应用）
 └── windows/            Windows 客户端（Electron，爱壹帆.exe）
-    ├── patch.sh        流水线 — 装依赖、NSIS→asar、重新打包、打 zip
+    ├── patch.py        Python 流水线（Linux/macOS）
+    ├── patch.sh        同一流水线的 bash 版（Linux/macOS；Debian/Ubuntu 自动装依赖）
     ├── engine.py       把 patches/*.patch 应用到解包出的 asar 目录
     └── patches/        每个功能点一个 *.patch（按文件名顺序应用）
 ```
 
 ## 使用方法
 
-```bash
-# Android APK  ->  已签名的补丁 APK
-bash tv/patch.sh  ~/1-1779820631.apk   [~/atv_patched.apk]
+**统一入口 `patch.py`**（在 Linux / macOS 上运行）—— 选择客户端、可直接从官方地址下载再打补丁。
+官方版本：**安卓电视/机顶盒客户端 v2.4.5，Windows 客户端 v3.1.5**。
 
-# Windows 安装包  ->  免安装的补丁版应用（zip）
+```
+python patch.py                                # 交互式：选客户端 → 路径/URL/回车下载官方版
+python patch.py windows --download             # 下载官方 Windows 安装包（v3.1.5）并打补丁
+python patch.py tv      --download -o out.apk  # 下载官方 TV APK（v2.4.5）并打补丁
+python patch.py windows <本地文件或URL> [-o 输出]
+python patch.py tv      <本地APK或URL>  [-o 输出]
+```
+
+下载的客户端会存到 `download/`，未用 `-o` 指定时默认输出到 `output/`（两者都已在 `.gitignore` 里忽略）。
+
+也可以直接调用某个客户端的子脚本（同样跨平台）：
+
+```
+python tv/patch.py       <input.apk>            [output.apk]   # -> 已签名的补丁 APK
+python windows/patch.py  <iyf_Setup_x.y.z.exe>  [output.zip]   # -> 免安装的补丁版应用（zip）
+```
+
+在 Linux / macOS 上也可以用等价的 bash 版（Debian/Ubuntu 上会通过 apt 自动装依赖）：
+
+```bash
+bash tv/patch.sh  ~/1-1779820631.apk   [~/atv_patched.apk]
 bash windows/patch.sh  ~/iyf_Setup_3.1.5.exe   [~/iyf_3.1.5_portable_vip.zip]
 ```
+
+`patch.py` 与 `patch.sh` 是同一套 `engine.py` + `patches/` 的两个入口，任选其一。依赖需放进 `PATH`：
+`python3`；打 TV 客户端还需 `apktool`/`apksigner`/`zipalign`/JDK；打 Windows 客户端还需 `7z` 与
+`node`/`npm`（`@electron/asar`）。`patch.py` 用 `shutil.which` 找工具，缺哪个会提示怎么装
+（但不会自动安装 —— 只有 `patch.sh` 会，且仅限 Debian/Ubuntu）。
 
 ## 工作原理
 

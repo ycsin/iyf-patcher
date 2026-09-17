@@ -10,6 +10,19 @@
 # =============================================================================
 import re, sys, os, glob
 
+_TTY = sys.stdout.isatty()
+_TAGC = {"ok": "1;32", "done": "1;32", "warn": "1;33", "FAIL": "1;31", "info": "1;36"}
+
+
+def emit(msg=""):
+    """Like print, but colorizes a leading [ok]/[warn]/[FAIL]/[done]/[info] tag on a TTY."""
+    s = str(msg)
+    if _TTY:
+        m = re.match(r"\[(ok|warn|FAIL|done|info)\]", s)
+        if m:
+            s = f"\033[{_TAGC[m.group(1)]}m{m.group(0)}\033[0m{s[m.end():]}"
+    sys.stdout.write(s + "\n")
+
 
 def main(root, patches_dir):
     smali_files = glob.glob(os.path.join(root, "smali*", "**", "*.smali"), recursive=True)
@@ -50,9 +63,9 @@ def main(root, patches_dir):
                 continue
             t2, n = fn(t)
             if n:
-                write(f, t2); tot += n; print(f"[ok] {rel(f)}: {label} x{n}")
+                write(f, t2); tot += n; emit(f"[ok] {rel(f)}: {label} x{n}")
         if tot == 0:
-            print(f"[warn] {label}: no match")
+            emit(f"[warn] {label}: no match")
         return tot
 
     def regex_patch(pattern, repl, need=None, only=None, label="patch"):
@@ -69,9 +82,9 @@ def main(root, patches_dir):
                 continue
             t2, n = patch_method(t, name, body_fn)
             if n:
-                write(f, t2); tot += n; print(f"[ok] {rel(f)}: {label} x{n}")
+                write(f, t2); tot += n; emit(f"[ok] {rel(f)}: {label} x{n}")
         if tot == 0:
-            print(f"[warn] {label}: not found")
+            emit(f"[warn] {label}: not found")
         return tot
 
     ns = dict(re=re, os=os, glob=glob, root=root, smali_files=smali_files, read=read, write=write,
@@ -82,9 +95,9 @@ def main(root, patches_dir):
     if not patch_files:
         raise SystemExit(f"[FAIL] no *.patch files in {patches_dir}")
     for pf in patch_files:
-        print(f"-- {os.path.basename(pf)}")
+        emit(f"-- {os.path.basename(pf)}")
         exec(compile(open(pf, encoding="utf-8").read(), pf, "exec"), dict(ns))
-    print("[done] all patches applied")
+    emit("[done] all patches applied")
 
 
 if __name__ == "__main__":

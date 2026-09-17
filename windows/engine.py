@@ -10,6 +10,19 @@
 # =============================================================================
 import sys, glob, os, re
 
+_TTY = sys.stdout.isatty()
+_TAGC = {"ok": "1;32", "done": "1;32", "warn": "1;33", "FAIL": "1;31", "info": "1;36"}
+
+
+def emit(msg=""):
+    """Like print, but colorizes a leading [ok]/[warn]/[FAIL]/[done]/[info] tag on a TTY."""
+    s = str(msg)
+    if _TTY:
+        m = re.match(r"\[(ok|warn|FAIL|done|info)\]", s)
+        if m:
+            s = f"\033[{_TAGC[m.group(1)]}m{m.group(0)}\033[0m{s[m.end():]}"
+    sys.stdout.write(s + "\n")
+
 
 def main(root, patches_dir):
     def rel(f):
@@ -21,20 +34,20 @@ def main(root, patches_dir):
             s = open(f, encoding="utf-8", errors="surrogatepass").read(); c = s.count(old)
             if c:
                 open(f, "w", encoding="utf-8", errors="surrogatepass").write(s.replace(old, new))
-                hits += c; print(f"[ok] {rel(f)}: {label} x{c}")
+                hits += c; emit(f"[ok] {rel(f)}: {label} x{c}")
         if hits == 0:
-            print(f"[{'FAIL' if required else 'warn'}] {label}: pattern NOT found")
+            emit(f"[{'FAIL' if required else 'warn'}] {label}: pattern NOT found")
         return hits
 
     def resub(relpath, pat, new, label):
         f = os.path.join(root, relpath)
         if not os.path.exists(f):
-            print(f"[warn] {label}: {relpath} missing"); return 0
+            emit(f"[warn] {label}: {relpath} missing"); return 0
         s = open(f, encoding="utf-8", errors="surrogatepass").read(); s2, n = re.subn(pat, new, s, count=1)
         if n:
-            open(f, "w", encoding="utf-8", errors="surrogatepass").write(s2); print(f"[ok] {relpath}: {label} x{n}")
+            open(f, "w", encoding="utf-8", errors="surrogatepass").write(s2); emit(f"[ok] {relpath}: {label} x{n}")
         else:
-            print(f"[warn] {label}: pattern NOT found in {relpath}")
+            emit(f"[warn] {label}: pattern NOT found in {relpath}")
         return n
 
     def repl_re(globpat, pat, new, label):
@@ -43,9 +56,9 @@ def main(root, patches_dir):
             s = open(f, encoding="utf-8", errors="surrogatepass").read(); s2, n = re.subn(pat, new, s)
             if n:
                 open(f, "w", encoding="utf-8", errors="surrogatepass").write(s2); hits += n
-                print(f"[ok] {rel(f)}: {label} x{n}")
+                emit(f"[ok] {rel(f)}: {label} x{n}")
         if hits == 0:
-            print(f"[FAIL] {label}: pattern NOT found")
+            emit(f"[FAIL] {label}: pattern NOT found")
         return hits
 
     def _matchbrace(s, ob):
@@ -80,9 +93,9 @@ def main(root, patches_dir):
                 i = cb + 1
             if ch:
                 open(f, "w", encoding="utf-8", errors="surrogatepass").write("".join(out)); hits += ch
-                print(f"[ok] {rel(f)}: {label} x{ch}")
+                emit(f"[ok] {rel(f)}: {label} x{ch}")
         if hits == 0:
-            print(f"[warn] {label}: no methods matched")
+            emit(f"[warn] {label}: no methods matched")
         return hits
 
     def inject_css(rule, marker):
@@ -92,9 +105,9 @@ def main(root, patches_dir):
             if ("iyf_patch: " + marker) not in s:
                 open(f, "a", encoding="utf-8", errors="surrogatepass").write(
                     "\n/* iyf_patch: " + marker + " */\n" + rule + "\n")
-                hits += 1; print(f"[ok] {rel(f)}: css +{marker}")
+                hits += 1; emit(f"[ok] {rel(f)}: css +{marker}")
         if hits == 0:
-            print(f"[warn] css '{marker}': no stylesheet found (or already injected)")
+            emit(f"[warn] css '{marker}': no stylesheet found (or already injected)")
         return hits
 
     ns = dict(repl=repl, resub=resub, repl_re=repl_re, force_method=force_method,
@@ -104,9 +117,9 @@ def main(root, patches_dir):
     if not patch_files:
         raise SystemExit(f"[FAIL] no *.patch files in {patches_dir}")
     for pf in patch_files:
-        print(f"-- {os.path.basename(pf)}")
+        emit(f"-- {os.path.basename(pf)}")
         exec(compile(open(pf, encoding="utf-8").read(), pf, "exec"), dict(ns))
-    print("[done] all patches applied")
+    emit("[done] all patches applied")
 
 
 if __name__ == "__main__":

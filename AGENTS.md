@@ -10,13 +10,22 @@ stable anchors and UI selectors, verification steps, and the hard-won gotchas. E
 just the essentials so you don't miss them if you only read this file.
 
 ## Run
-```bash
-bash tv/patch.sh       <input.apk>            [output.apk]   # → signed patched APK
-bash windows/patch.sh  <iyf_Setup_x.y.z.exe>  [output.zip]   # → portable patched app (zip)
+Unified entry (runs on Linux/macOS; picks client, can download the official build first via
+stdlib `urllib`):
 ```
-Requirements: `python3`, `bash`, `7z`; TV also `apktool`/`apksigner`/`zipalign`/JDK; Windows also
-`node`/`npm` (`@electron/asar`). Patches live in `tv/patches/` and `windows/patches/` as
-`NN-name.patch` (small Python snippets), applied in filename order by `engine.py`.
+python patch.py                          # interactive: pick client → path/URL/Enter=download
+python patch.py windows --download       # download official Windows installer (v3.1.5), then patch
+python patch.py tv      --download -o out.apk   # official TV APK (v2.4.5)
+python patch.py windows <local-or-URL> [-o out]   ·   python patch.py tv <local-or-URL> [-o out]
+```
+Or a sub-patcher directly: `python tv/patch.py <input.apk> [out]` /
+`python windows/patch.py <installer.exe> [out]`; `patch.sh` are the bash equivalents
+(Linux/macOS; apt auto-install on Debian/Ubuntu). All front-ends drive the SAME
+`engine.py` + `patches/`. Requirements on `PATH`: `python3`; patching the TV client also needs
+`apktool`/`apksigner`/`zipalign`/JDK; the Windows client also needs `7z` and `node`/`npm`
+(`@electron/asar`). Patches live in
+`tv/patches/` and `windows/patches/` as `NN-name.patch` (small Python snippets), applied in
+filename order by `engine.py`.
 
 ## Non-negotiable rules
 - **Anchor on rename-proof content** (method names, DataBinding fields, resource ids, stable API
