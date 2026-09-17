@@ -1,0 +1,25 @@
+{
+  "name": "iyf patcher",
+  // Ubuntu 24.04 → apt has apksigner / zipalign / default-jdk-headless / python3.12
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  // node/npm for the Windows (Electron) pipeline: @electron/asar is installed in setup.sh
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" }
+  },
+
+  // onCreateCommand (not postCreate) so it also runs during Codespaces prebuilds
+  "onCreateCommand": "bash .devcontainer/setup.sh",
+
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}
