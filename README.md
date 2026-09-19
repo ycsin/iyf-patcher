@@ -4,10 +4,15 @@
 
 ```
 iyf/
-├── patch.py            统一入口：识别系统 → 选客户端 → 可下载官方版 → 分发（跨平台）
-├── tv/                 Android TV 客户端
+├── patch.py            统一入口：选客户端 → 可下载官方版 → 分发（Linux/macOS）
+├── tv/                 安卓电视/机顶盒 客户端（tv.ifvod.classic）
 │   ├── patch.py        Python 流水线（Linux/macOS）
 │   ├── patch.sh        同一流水线的 bash 版（Linux/macOS；Debian/Ubuntu 自动装依赖）
+│   ├── engine.py       把 patches/*.patch 应用到反编译出的 smali
+│   ├── repackage.py    把新 dex 换回原始 apk
+│   └── patches/        每个功能点一个 *.patch（按文件名顺序应用）
+├── mobile/             安卓手机 客户端（com.cqcsy.ifvod）—— 复用同一套引擎/换 dex
+│   ├── patch.py        Python 流水线（Linux/macOS）
 │   ├── engine.py       把 patches/*.patch 应用到反编译出的 smali
 │   ├── repackage.py    把新 dex 换回原始 apk
 │   └── patches/        每个功能点一个 *.patch（按文件名顺序应用）
@@ -21,14 +26,14 @@ iyf/
 ## 使用方法
 
 **统一入口 `patch.py`**（在 Linux / macOS 上运行）—— 选择客户端、可直接从官方地址下载再打补丁。
-官方版本：**安卓电视/机顶盒客户端 v2.4.5，Windows 客户端 v3.1.5**。
+官方版本：**安卓电视/机顶盒客户端 v2.4.5，安卓手机客户端 v1.7.8，Windows 客户端 v3.1.5**。
 
 ```
 python patch.py                                # 交互式：选客户端 → 路径/URL/回车下载官方版
-python patch.py windows --download             # 下载官方 Windows 安装包（v3.1.5）并打补丁
 python patch.py tv      --download -o out.apk  # 下载官方 TV APK（v2.4.5）并打补丁
-python patch.py windows <本地文件或URL> [-o 输出]
-python patch.py tv      <本地APK或URL>  [-o 输出]
+python patch.py mobile  --download -o out.apk  # 下载官方安卓手机 APK（v1.7.8）并打补丁
+python patch.py windows --download             # 下载官方 Windows 安装包（v3.1.5）并打补丁
+python patch.py <client> <本地文件或URL> [-o 输出]   # client = tv | mobile | windows
 ```
 
 下载的客户端会存到 `download/`，未用 `-o` 指定时默认输出到 `output/`（两者都已在 `.gitignore` 里忽略）。
@@ -93,6 +98,25 @@ bash windows/patch.sh  ~/iyf_Setup_3.1.5.exe   [~/iyf_3.1.5_portable_vip.zip]
 - `33-mine-expiry` — 到期时间显示为「永不到期」
 - `40-feed-ads` — 过滤掉首页的跳转/广告卡片
 - `41-skip-ad-tip` — 抑制「VIP已跳过广告」横幅（播放继续）
+
+**安卓手机 v1.7.8（`mobile/patches/`）**（复用 `tv/` 的引擎与换 dex 流程）
+- `10-vip-core` — 同上（模型为 `com.ppde.library.bean.UserInfoBean`）：`getVipLevel`→3、`isGiveVip`→true、`getVipTypeName`→至尊VIP ✅
+- `11-verifytrust` — 修复重签名后无法登录：`com.ppde.verifytrust` 签名校验 —— 让请求头哈希 `c.a()` 恒为原版签名、`c.b()`/启动门禁 `d.b(Context)` 恒为 true ✅
+- `20-splash-ad` — 开屏广告：保留开屏页与其初始化（`F1()` 拉全局配置/备用服务器，绑在开屏页生命周期上），只把 `w1()` 广告分支里的 `A1(showURL)`（显示广告图+自带倒计时进主页）替换为 `t1()`（无广告分支的 2 秒进主页）。于是开屏页照常显示与初始化，只是不显示广告图，2 秒后正常进主页。`A1` 全类仅此一处调用。⚠️ 早期用“`onCreate` 末尾直接 `E1()`+finish 跳过整个开屏”会在 `F1()` 异步配置返回前销毁其生命周期观察者 → 全局配置永不加载 → 登录“初始化中…”、首页“加载失败了”；故改为只抑制广告、保留开屏初始化 ✅
+- `21-video-ads` — 前贴/中插广告：`u9/c.e(J)`（按进度查找广告插入点）返回 null ✅
+- `22-feed-ads` — 首页信息流过滤，都在 drakeet `MultiTypeAdapter.h(List)`（setItems，之后 `notifyDataSetChanged` 整表刷新）里就地进行：①广告卡片 `AdvertBean`（`j9/c` 委托）——交错网格+间距装饰下折叠行会留空隙，故直接不入列表；②「今日热点」板块——`util/b.d()` 拍平成 `ItemTitleBean(itemName="今日热点")` 表头+`MovieModuleBean` 内容，用 dropping 状态机整段删（板块边界 `HomeNetBean`/`util/c`(历史记录)/`RecommendMultiBean` 复位保留，不误伤相邻板块）。就地删、仅对 ArrayList、保持 `items===p` 引用相等。**必须配合 `35`**：删今日热点会带走历史记录插入所依赖的锚点 ✅
+- `22`（顶部轮播）— `com.youth.banner.Banner<AdvertBean>`（`HomeNetBean.bannerList`）**混合**广告位与内容位，App 用 `BannerViewAdapter.d()` 的 `resourceType==1` 判定广告位——故 `getBannerList()` 只滤掉 `resourceType==1`、保留内容位 ✅
+- `23-danmu-ads` — 弹幕广告：快手 akdanmaku 渲染，`danmaku/e.h(I,BarrageBean)` 转成 DanmakuItemData（`isAdvert` 的会做成带按钮的广告弹幕）。转换/入队都在协程 `e$f` 循环里，在 `check-cast` 出 BarrageBean 后判 `isAdvert()`：是广告就推进下标并跳过入队 —— 广告弹幕不渲染，真实弹幕照常（覆盖批量+socket 两种来源） ✅
+- `24-pause-ad` — 暂停贴片广告：`LiteVideoPlayer.p0(AdvertBean,…)`（把广告加载进播放器内浮层）置空 ✅
+- `25-detail-banner` — 详情页“点赞/评论”上方的广告横幅（`com.youth.banner.Banner<AdvertBean>`）：`VideoIntroductionFragment.I0(list)` 入参强制置空，走 App 自带“无广告”分支——横幅与占位 Space 一起 GONE，无残留间距 ✅
+- `30-mine-expiry` — 「我的」页 VIP 到期时间显示为“永不到期”：卡片 `vipTime`（`LayoutMineBinding` 字段 `y`）原用 `getEDate()` 拼 “%1$s到期”（string `0x7f1305b1`）；在 `MineFragment.d0()` 的 setText 前把字符串寄存器覆盖为字面量（不改 res，走 dex） ✅
+- `31-mine-open-vip` — 「我的」页隐藏 VIP 区：①非会员提示图 `notVipTip`（字段 `l`）恒 GONE；②整张「至尊VIP」会员卡片 `vipInfo`（字段 `w`）在 d0 设为可见后立即置 GONE（VIP 标识/到期/续费按钮整块都不显示）；③宿主 `MainActivity.startBuySelf(View)` 置空（防御性，即使卡片可点也不跳购买）。（因整卡隐藏，`30-mine-expiry` 的“永不到期”已看不到，保留无害）✅
+- `32-mine-ad-center` — 「我的」页“个人服务”里删除「广告中心」「VIP开通记录」「大V认证」三项：菜单标题来自 string-array `person_menu`（可变 List），动作来自并行整型表（字段 `c`，`c.get(pos)` 决定 sparse-switch 路由）。在 `bigVSwitch` 分支合流处用 `indexOf(标题)` 从两张表同下标删除（各段用不同标签），其余项标题/路由仍对齐 ✅
+- `33-hide-bottom-nav` — 隐藏底部导航「发现」+「VIP」：底部是 `activity_main.xml` 的 RadioGroup，各项 `button_find`(0x7f0a010f)/`button_vip`(0x7f0a0114)。新增自带类 `com.ppde.ppcd.patch.UiHide.hideBottomTabs(Activity)`（findViewById→GONE，找不到就跳过），在 `MainActivity.onCreate` 末尾调用 ✅
+- `34-hide-home-recommend` — 隐藏首页「为你推荐」板块：它由专用加载器 `RecommendFragment.S0()`（getRecommendedData）拉取并拼装（`ItemTitleBean(标题=为你推荐)` + 内容）。把 `S0()` 置空即不再加载/拼装该板块 ✅
+- `35-home-hot-history` — 删今日热点后保住「历史记录」：历史记录由 `getFollowingData$1 -> util/b.c()` 反查“最后一个 `type==1` 的 `MovieModuleBean`”锚点后插入（`ItemTitleBean(历史记录)`+`util/c` 内容），而那锚点正是今日热点的内容。①`c()` 找不到锚点时把插入位置从 -1 改为 0（插到列表顶部），不再返回 -1；②`getFollowingData$1` 那次插入的通知从 `notifyItemRangeInserted(pos,2)` 改为 `notifyDataSetChanged()`（顶部插入后位置与按位通知对不上，改整表刷新，交错网格才不会 `LazySpanLookup.invalidateAfter(-1)` 越界崩）。于是今日热点没了、历史记录仍在（移到信息流顶部）✅
+- `37-home-no-loadmore` — 首页底部“精彩内容即将呈现…”加载器：那是 SmartRefreshLayout 上拉加载更多页脚（`RefreshFooter`/`refresh_tip`），加载的是已被 `34` 移除的「为你推荐」下一页，故一直挂着。`RecommendFragment.M()` 里 `t0(v2)`=`setEnableLoadMore`、`u0(v2)`=`setEnableRefresh`（`v2=1`）。把 `t0` 的入参从 `v2` 改读 `v1`（此处恒为 0）→ `setEnableLoadMore(false)`，页脚不再出现，下拉刷新不受影响。⚠️ 不能像早前那样注入 `const/4 v2,0x0`：同一个 `M()` 后面把 **`v2` 复用为 util/c 一对多注册第二个委托的数组下标**（`aput WatchingDelegate, v10, v2`，v2=1），改 v2 会让下标 1 变 null → drakeet 收到 null 委托 → onResume 崩溃 ✅
+- `40-auto-sign` — 启动静默自动签到：新增自带类 `com.ppde.ppcd.patch.AutoSign`（`o8/b` 空回调 + 静态 `fire()` 复刻 `SignGetGiftActivity.k2()` 经 `network.d.i(url=base.b.q1(),…)` 的签到请求，自动带鉴权头），在 `MainActivity.onCreate` 末尾调用一次。在主界面起来后才发请求、不碰开屏初始化。（连不上服务器排查时曾临时禁用以隔离，实为 `20` 早期做法所致，已恢复）✅
 
 **Windows v3.1.5（`windows/patches/`）**
 - `10/11/12/13-ads-*` — 片头、暂停、横幅（`hideAds`）广告，以及残留的空广告容器

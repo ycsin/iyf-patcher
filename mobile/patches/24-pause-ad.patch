@@ -1,0 +1,18 @@
+# 暂停广告：视频暂停时，LiteVideoPlayer 会把一个 AdvertBean 通过 p0(AdvertBean, LiteVideoPlayer)
+# 加载到播放器内的广告浮层（LayoutVideoAdvertisementBinding：图片 d + 文案 c）。这是“暂停贴片”，
+# 与已处理的前贴/中插（media3 AdPlaybackState，见 21-video-ads）是两套。把 p0 置空即可 —— 浮层
+# 平时是 GONE，不再被显示；两个调用处只把它当展示入口，无返回值依赖，置空安全。
+_pat = re.compile(
+    r'(?ms)^\.method public final p0\(Lcom/ppde/ppcd/bean/AdvertBean;Lcom/ppde/ppcd/video/player/LiteVideoPlayer;\)V\n'
+    r'.*?^\.end method[ \t]*$')
+_body = "\n".join([
+    ".method public final p0(Lcom/ppde/ppcd/bean/AdvertBean;Lcom/ppde/ppcd/video/player/LiteVideoPlayer;)V",
+    "    .locals 0",
+    "",
+    "    return-void",
+    ".end method",
+])
+regex_patch(_pat, lambda m: _body,
+            need="p0(Lcom/ppde/ppcd/bean/AdvertBean;Lcom/ppde/ppcd/video/player/LiteVideoPlayer;)V",
+            only="smali*/com/ppde/ppcd/video/player/LiteVideoPlayer.smali",
+            label="pause-ad overlay p0() -> no-op (no pause advert)")

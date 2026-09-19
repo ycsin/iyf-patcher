@@ -1,0 +1,39 @@
+# 在用户模型上强制最高档 VIP。模型通过一个**稳定的地标**定位：声明了 isGiveVip() 的那个类 ——
+# 这个名字应用无法混淆，否则它自己的 JSON 反序列化会坏掉。应用自身对「已缓存用户」的空判断保持不动，
+# 所以未登录时仍是非 VIP；用任意账号登录 -> 最高档 VIP。
+#   getVipLevel()   -> 3      （所有 `vipLevel > 0` 的判断都通过；档位是 1..3）
+#   isGiveVip()     -> true
+#   getVipTypeName()-> "至尊VIP"
+LANDMARK = re.compile(r'^\.method\b[^\n]*\bisGiveVip\(', re.M)
+named = [f for f in smali_files if os.path.basename(f) == "UserInfoModel.smali"]
+um = [f for f in (named or smali_files) if LANDMARK.search(read(f))]
+if not um:
+    raise SystemExit("[FAIL] user model not found (no class declares isGiveVip)")
+print("[info] user model:", [os.path.relpath(f, root) for f in um])
+
+def body_max_int(rt):
+    if rt == 'Ljava/lang/Integer;':
+        return ("    .locals 1\n\n    const/4 v0, 0x3\n\n"
+                "    invoke-static {v0}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;\n\n"
+                "    move-result-object v0\n\n    return-object v0\n")
+    if rt == 'I':
+        return "    .locals 1\n\n    const/4 v0, 0x3\n\n    return v0\n"
+    raise SystemExit(f"[FAIL] unexpected getVipLevel return type: {rt}")
+
+def body_true(rt):
+    if rt == 'Ljava/lang/Boolean;':
+        return ("    .locals 1\n\n    const/4 v0, 0x1\n\n"
+                "    invoke-static {v0}, Ljava/lang/Boolean;->valueOf(Z)Ljava/lang/Boolean;\n\n"
+                "    move-result-object v0\n\n    return-object v0\n")
+    if rt == 'Z':
+        return "    .locals 1\n\n    const/4 v0, 0x1\n\n    return v0\n"
+    raise SystemExit(f"[FAIL] unexpected isGiveVip return type: {rt}")
+
+def body_typename(rt):
+    return "    .locals 1\n\n    const-string v0, \"至尊VIP\"\n\n    return-object v0\n"
+
+g = method_patch("getVipLevel", body_max_int, files=um, label="getVipLevel -> 3")
+method_patch("isGiveVip", body_true, files=um, label="isGiveVip -> true")
+method_patch("getVipTypeName", body_typename, files=um, label="getVipTypeName -> 至尊VIP")
+if g == 0:
+    raise SystemExit("[FAIL] getVipLevel() not found -> refusing to ship a no-op patch")

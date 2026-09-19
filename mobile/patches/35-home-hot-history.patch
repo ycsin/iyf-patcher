@@ -1,0 +1,32 @@
+# 删「今日热点」的同时保住「历史记录」。
+# 背景：历史记录由 RecommendFragment$getFollowingData$1 -> util/b.c(list,data,cb) 插入：c() 在 list 里
+#   反向找“最后一个 type==1 的 MovieModuleBean”做锚点，找到就在其后插入 ItemTitleBean(历史记录)+util/c(内容)
+#   并返回位置；找不到返回 -1 且不插。那个 type==1 的锚点正是「今日热点」的内容——22 删掉今日热点后
+#   c() 返回 -1，历史记录就没了（之前还因未判 -1 直接 notifyItemRangeInserted(-1,2) 而崩）。
+#
+# 两处改动（都在 util/b / getFollowingData$1，不动别的）：
+#  ① c() 找不到锚点时，把插入位置从 -1 改成 0（插到列表顶部）——即把 :cond_1 分支的 `const/4 v0, -0x1`
+#     改成 `const/4 v0, 0x0`，于是 `if-ne v0, v2(-1), :cond_2` 成立，落入正常插入逻辑，在顶部插入历史记录。
+#  ② getFollowingData$1 里那次插入的通知，从 notifyItemRangeInserted(pos,2) 改为 notifyDataSetChanged()
+#     —— 整表刷新，不做按位增量，交错网格不会因位置/数量不一致而 LazySpanLookup 越界崩溃。
+#     （原来位置来自锚点；改成顶部插入后位置对不上按位通知，故必须整表刷新。）
+
+# ① c(): 未找到锚点时插到顶部（-1 -> 0）
+regex_patch(
+    re.compile(
+        r'(?ms)(const/4 v0, )-0x1'
+        r'(\n(?:[ \t]*\n|[ \t]*\.line \d+\n)*    :goto_0\n'
+        r'(?:[ \t]*\n|[ \t]*\.line \d+\n)*    if-ne v0, v2, :cond_2\n)'),
+    lambda m: m.group(1) + "0x0" + m.group(2),
+    need="if-ne v0, v2, :cond_2",
+    only="smali*/com/ppde/ppcd/delegate/util/b.smali",
+    label="util/b.c(): insert history at top (pos 0) when anchor missing (was -1)")
+
+# ② getFollowingData$1: 用整表刷新代替按位插入通知（位置无关，交错网格安全）
+regex_patch(
+    re.compile(
+        r'invoke-virtual \{v0, p1, v1\}, Landroidx/recyclerview/widget/RecyclerView\$Adapter;->notifyItemRangeInserted\(II\)V'),
+    lambda m: "invoke-virtual {v0}, Landroidx/recyclerview/widget/RecyclerView$Adapter;->notifyDataSetChanged()V",
+    need="notifyItemRangeInserted(II)V",
+    only="smali*/com/ppde/ppcd/main/home/RecommendFragment$getFollowingData$1.smali",
+    label="getFollowingData: notifyDataSetChanged instead of ItemRangeInserted (staggered-grid safe)")

@@ -1,0 +1,27 @@
+# 登录/接口被 com.ppde.verifytrust 的“签名校验”挡住的原因：
+#   启动时 VideoApplication 调 d.b(Context) 算自身 APK 签名的 SHA-256，与内置白名单比对（本地门禁）；
+#   同时把该哈希经 c.a() 放进请求头发给服务器校验。重签名后哈希变了 → 本地门禁失败且服务器拒绝 → 无法登录。
+# 原版签名 SHA-256 = 6c04...7d5e（正是白名单之一），所以：
+#   1) 让请求头里的哈希 c.a() 恒等于原版哈希（服务器校验通过）
+#   2) 让有效标志 c.b() 恒为 true
+#   3) 让本地启动门禁 d.b(Context) 恒为 true
+_ORIG = "6c04687bcce3baa2d2f63d522f55136dfa1c74a682848b672fc204a4f04f7d5e"
+
+regex_patch(
+    re.compile(r'(?ms)^\.method public final a\(\)Ljava/lang/String;\n.*?^\.end method[ \t]*$'),
+    lambda m: ('.method public final a()Ljava/lang/String;\n    .locals 1\n\n'
+               '    const-string v0, "' + _ORIG + '"\n\n    return-object v0\n.end method'),
+    only="smali*/com/ppde/verifytrust/c.smali",
+    label="verifytrust c.a() -> original signature hash (header)")
+
+regex_patch(
+    re.compile(r'(?ms)^\.method public final b\(\)Z\n.*?^\.end method[ \t]*$'),
+    lambda m: '.method public final b()Z\n    .locals 1\n\n    const/4 v0, 0x1\n\n    return v0\n.end method',
+    only="smali*/com/ppde/verifytrust/c.smali",
+    label="verifytrust c.b() -> true (valid)")
+
+regex_patch(
+    re.compile(r'(?ms)^\.method public final b\(Landroid/content/Context;\)Z\n.*?^\.end method[ \t]*$'),
+    lambda m: '.method public final b(Landroid/content/Context;)Z\n    .locals 1\n\n    const/4 v0, 0x1\n\n    return v0\n.end method',
+    only="smali*/com/ppde/verifytrust/d.smali",
+    label="verifytrust d.b(Context) -> true (startup gate)")

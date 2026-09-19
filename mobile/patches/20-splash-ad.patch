@@ -1,0 +1,16 @@
+# 开屏广告（保留开屏页与其初始化）：SplashActivity 正常做初始化（F1 拉全局配置/备用服务器，绑在
+# 开屏页生命周期上），然后 w1() 解析 splashAdvert 配置：若有有效未过期的广告，就走“广告分支”——
+# 设字段 e、调 A1(showURL) 显示广告图（A1 内部有自己的倒计时进主页）；否则走无广告分支 t1()
+# （2 秒后经 o0->m1->u1->E1 进主页）。
+#
+# 不能像早前那样在 onCreate 直接 E1()+finish（会在 F1 异步配置返回前销毁其生命周期观察者 → 配置
+# 永不加载 → 登录“初始化中”、首页“加载失败”）。这里只把“广告分支”里的 A1(展示广告) 换成 t1()
+# （无广告分支的 2 秒进主页）：开屏页照常显示与初始化，只是不再显示广告图，2 秒后正常进主页。
+# A1 在全类中仅此一处调用（w1 的广告展示），替换安全；t1() 无参。
+regex_patch(
+    re.compile(
+        r'invoke-direct \{p0, v0\}, Lcom/ppde/ppcd/main/SplashActivity;->A1\(Ljava/lang/String;\)V'),
+    lambda m: "invoke-direct {p0}, Lcom/ppde/ppcd/main/SplashActivity;->t1()V",
+    need="A1(Ljava/lang/String;)V",
+    only="smali*/com/ppde/ppcd/main/SplashActivity.smali",
+    label="splash: replace ad display A1() with t1() (no splash ad, keep splash+init)")

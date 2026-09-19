@@ -1,0 +1,13 @@
+# 视频前贴/中插广告：播放控制器 u9/c 用 e(J)（按当前播放进度在 d:ArrayList 里查找“此刻该
+# 触发的广告插入点 AdvertPlayPointBean”）。让它直接返回 null —— 任何时刻都查不到插入点，
+# 于是 f/i/j/o 等展示逻辑不会被触发，前贴/中插广告不再播放。
+# 只改 u9/c.smali 里这个精确签名的方法，避免误伤其它同名 e()。
+_pat = re.compile(
+    r'(?ms)^\.method private final e\(J\)Lcom/ppde/ppcd/video/bean/AdvertPlayPointBean;\n'
+    r'.*?^\.end method[ \t]*$')
+_body = (".method private final e(J)Lcom/ppde/ppcd/video/bean/AdvertPlayPointBean;\n"
+         "    .locals 1\n\n    const/4 v0, 0x0\n\n    return-object v0\n.end method")
+regex_patch(_pat, lambda m: _body,
+            need="e(J)Lcom/ppde/ppcd/video/bean/AdvertPlayPointBean;",
+            only="smali*/u9/c.smali",
+            label="video ad play-point finder -> null (no pre/mid-roll ads)")

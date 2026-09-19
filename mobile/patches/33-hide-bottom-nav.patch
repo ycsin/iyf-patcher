@@ -1,0 +1,60 @@
+# 隐藏底部导航栏的「发现」和「VIP」两个入口：
+# 底部是 activity_main.xml 的 RadioGroup(buttonGroup)，各项是 CustomRadioButton / LinearLayout：
+#   button_find(发现, id 0x7f0a010f)、button_vip(VIP, id 0x7f0a0114)。
+# 新增自带类 com.ppde.ppcd.patch.UiHide.hideBottomTabs(Activity)：用 findViewById 拿到这两个 View 后置 GONE
+#（findViewById 找不到就跳过，安全）；在 MainActivity.onCreate 末尾调用一次。
+# 资源不重建（换 dex），id 与原包一致；RadioGroup 各项 weight=1，隐藏两项后其余项自动均分。
+
+_smali = """.class public final Lcom/ppde/ppcd/patch/UiHide;
+.super Ljava/lang/Object;
+.source "UiHide"
+
+
+# direct methods
+.method public static hideBottomTabs(Landroid/app/Activity;)V
+    .locals 2
+
+    const/16 v1, 0x8
+
+    const v0, 0x7f0a010f
+
+    invoke-virtual {p0, v0}, Landroid/app/Activity;->findViewById(I)Landroid/view/View;
+
+    move-result-object v0
+
+    if-eqz v0, :s1
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+
+    :s1
+    const v0, 0x7f0a0114
+
+    invoke-virtual {p0, v0}, Landroid/app/Activity;->findViewById(I)Landroid/view/View;
+
+    move-result-object v0
+
+    if-eqz v0, :s2
+
+    invoke-virtual {v0, v1}, Landroid/view/View;->setVisibility(I)V
+
+    :s2
+    return-void
+.end method
+"""
+
+_dir = os.path.join(root, "smali_classes3", "com", "ppde", "ppcd", "patch")
+os.makedirs(_dir, exist_ok=True)
+write(os.path.join(_dir, "UiHide.smali"), _smali)
+print("[ok] smali_classes3/com/ppde/ppcd/patch/UiHide.smali: created (bottom-nav hide helper) x1")
+
+# 在 MainActivity.onCreate 末尾注入 hideBottomTabs(this)
+_pat = re.compile(
+    r'(?ms)(invoke-static \{[pv]\d+, [pv]\d+\}, Landroidx/core/view/ViewCompat;->setOnApplyWindowInsetsListener'
+    r'\(Landroid/view/View;Landroidx/core/view/OnApplyWindowInsetsListener;\)V\n'
+    r'.*?)(    return-void\n)')
+
+regex_patch(_pat,
+    lambda m: m.group(1) + "\n    invoke-static {p0}, Lcom/ppde/ppcd/patch/UiHide;->hideBottomTabs(Landroid/app/Activity;)V\n\n" + m.group(2),
+    need="setOnApplyWindowInsetsListener",
+    only="smali*/com/ppde/ppcd/main/MainActivity.smali",
+    label="MainActivity.onCreate -> hide 发现 + VIP bottom tabs")

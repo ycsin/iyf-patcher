@@ -1,0 +1,176 @@
+# 首页信息流广告：广告卡片是 AdvertBean（register(AdvertBean.class -> j9/c) 渲染）。首页是交错网格
+#   (CustomStaggeredGridLayoutManager)+间距装饰，把广告行折叠成 0 高度会残留网格槽/间距，故直接让
+#   AdvertBean 根本进不了列表。
+# 在通用 setItems（drakeet `MultiTypeAdapter.h(List)`，之后跟 notifyDataSetChanged 整表刷新，交错网格安全）
+#   里就地剔除 AdvertBean：就地删（保持 adapter.items===fragment.p 引用相等）；仅对 ArrayList 生效
+#   （空/不可变列表本就不含广告，跳过以免 Iterator.remove() 抛 UnsupportedOperationException）；
+#   不含广告的列表原样存回 —— 对其它所有列表无副作用。只改这一个方法。
+#
+# 顺带删「今日热点」板块：它被 util/b.d() 拍平成 ItemTitleBean(itemName="今日热点") 表头 + MovieModuleBean 内容行。
+#   用 dropping 状态机整段删（遇 ItemTitleBean 置 dropping=名字是否“今日热点”；遇板块边界
+#   HomeNetBean/util/c(历史记录/继续观看)/RecommendMultiBean 复位并保留；dropping 期间的内容行一并删）。
+#   ⚠️ 但「历史记录」由 getFollowingData -> util/b.c() 插到“最后一个 type==1 的 MovieModuleBean”之后，
+#   而那锚点正是今日热点的内容；删今日热点会让 c() 返回 -1、历史记录不再插入。故必须配合 `35`：
+#   让 c() 找不到锚点时改插到列表顶部、并把该插入的通知改为 notifyDataSetChanged（整表刷新，交错网格安全）。
+_pat = re.compile(
+    r'(?ms)^\.method public h\(Ljava/util/List;\)V\n'
+    r'.*?^\.end method[ \t]*$')
+
+_body = "\n".join([
+    ".method public h(Ljava/util/List;)V",
+    "    .locals 6",
+    "",
+    "    const-string v0, \"<set-?>\"",
+    "",
+    "    invoke-static {p1, v0}, Lkotlin/jvm/internal/m;->h(Ljava/lang/Object;Ljava/lang/String;)V",
+    "",
+    "    instance-of v0, p1, Ljava/util/ArrayList;",
+    "",
+    "    if-eqz v0, :vp_store",
+    "",
+    "    const/4 v5, 0x0",
+    "",
+    "    invoke-interface {p1}, Ljava/util/List;->iterator()Ljava/util/Iterator;",
+    "",
+    "    move-result-object v1",
+    "",
+    "    :vp_loop",
+    "    invoke-interface {v1}, Ljava/util/Iterator;->hasNext()Z",
+    "",
+    "    move-result v2",
+    "",
+    "    if-eqz v2, :vp_store",
+    "",
+    "    invoke-interface {v1}, Ljava/util/Iterator;->next()Ljava/lang/Object;",
+    "",
+    "    move-result-object v3",
+    "",
+    "    instance-of v2, v3, Lcom/ppde/ppcd/bean/AdvertBean;",
+    "",
+    "    if-nez v2, :vp_remove",
+    "",
+    "    instance-of v2, v3, Lcom/ppde/ppcd/bean/ItemTitleBean;",
+    "",
+    "    if-eqz v2, :vp_homenet",
+    "",
+    "    check-cast v3, Lcom/ppde/ppcd/bean/ItemTitleBean;",
+    "",
+    "    invoke-virtual {v3}, Lcom/ppde/ppcd/bean/ItemTitleBean;->getItemName()Ljava/lang/String;",
+    "",
+    "    move-result-object v3",
+    "",
+    "    const-string v4, \"今日热点\"",
+    "",
+    "    invoke-virtual {v4, v3}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z",
+    "",
+    "    move-result v5",
+    "",
+    "    if-nez v5, :vp_remove",
+    "",
+    "    goto :vp_loop",
+    "",
+    "    :vp_homenet",
+    "    instance-of v2, v3, Lcom/ppde/ppcd/bean/net/HomeNetBean;",
+    "",
+    "    if-nez v2, :vp_boundary",
+    "",
+    "    instance-of v2, v3, Lcom/ppde/ppcd/delegate/util/c;",
+    "",
+    "    if-nez v2, :vp_boundary",
+    "",
+    "    instance-of v2, v3, Lcom/ppde/ppcd/bean/RecommendMultiBean;",
+    "",
+    "    if-eqz v2, :vp_content",
+    "",
+    "    :vp_boundary",
+    "    const/4 v5, 0x0",
+    "",
+    "    goto :vp_loop",
+    "",
+    "    :vp_content",
+    "    if-eqz v5, :vp_loop",
+    "",
+    "    :vp_remove",
+    "    invoke-interface {v1}, Ljava/util/Iterator;->remove()V",
+    "",
+    "    goto :vp_loop",
+    "",
+    "    :vp_store",
+    "    iput-object p1, p0, Lcom/drakeet/multitype/MultiTypeAdapter;->a:Ljava/util/List;",
+    "",
+    "    return-void",
+    ".end method",
+])
+
+regex_patch(_pat, lambda m: _body,
+            need="h(Ljava/util/List;)V",
+            only="smali*/com/drakeet/multitype/MultiTypeAdapter.smali",
+            label="feed setItems -> strip AdvertBean + 今日热点 section (paired with 35 for 历史记录)")
+
+
+# 首页顶部的“轮播卡片”是一个 com.youth.banner.Banner<AdvertBean>，数据来自
+# HomeNetBean.bannerList（List<AdvertBean>）。但它是**混合**的：既有广告位，也有正常的推荐内容，
+# 全都建模成 AdvertBean。App 自己的区分方式在 BannerViewAdapter.d() 里：resourceType == 1 时
+# 显示“广告”角标（即广告位），!= 1 则是内容位。所以这里只过滤掉 resourceType==1 的广告位，
+# 保留内容位——顶部轮播照常显示，只是不再夹带广告。返回新建的过滤后列表（非 null）；
+# util/b 读到（可能变空的）列表后仍会做 null/isEmpty 判空，安全。
+_bp = re.compile(
+    r'(?ms)^\.method public final getBannerList\(\)Ljava/util/List;\n'
+    r'.*?^\.end method[ \t]*$')
+_bbody = "\n".join([
+    ".method public final getBannerList()Ljava/util/List;",
+    "    .locals 5",
+    "    .annotation system Ldalvik/annotation/Signature;",
+    "        value = {",
+    "            \"()\",",
+    "            \"Ljava/util/List<\",",
+    "            \"Lcom/ppde/ppcd/bean/AdvertBean;\",",
+    "            \">;\"",
+    "        }",
+    "    .end annotation",
+    "",
+    "    new-instance v0, Ljava/util/ArrayList;",
+    "",
+    "    invoke-direct {v0}, Ljava/util/ArrayList;-><init>()V",
+    "",
+    "    const/4 v4, 0x1",
+    "",
+    "    iget-object v1, p0, Lcom/ppde/ppcd/bean/net/HomeNetBean;->bannerList:Ljava/util/List;",
+    "",
+    "    if-eqz v1, :vp_done",
+    "",
+    "    invoke-interface {v1}, Ljava/util/List;->iterator()Ljava/util/Iterator;",
+    "",
+    "    move-result-object v1",
+    "",
+    "    :vp_loop",
+    "    invoke-interface {v1}, Ljava/util/Iterator;->hasNext()Z",
+    "",
+    "    move-result v2",
+    "",
+    "    if-eqz v2, :vp_done",
+    "",
+    "    invoke-interface {v1}, Ljava/util/Iterator;->next()Ljava/lang/Object;",
+    "",
+    "    move-result-object v2",
+    "",
+    "    check-cast v2, Lcom/ppde/ppcd/bean/AdvertBean;",
+    "",
+    "    invoke-virtual {v2}, Lcom/ppde/ppcd/bean/AdvertBean;->getResourceType()I",
+    "",
+    "    move-result v3",
+    "",
+    "    if-eq v3, v4, :vp_loop",
+    "",
+    "    invoke-virtual {v0, v2}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z",
+    "",
+    "    goto :vp_loop",
+    "",
+    "    :vp_done",
+    "    return-object v0",
+    ".end method",
+])
+regex_patch(_bp, lambda m: _bbody,
+            need="getBannerList()Ljava/util/List;",
+            only="smali*/com/ppde/ppcd/bean/net/HomeNetBean.smali",
+            label="HomeNetBean.getBannerList -> drop resourceType==1 ad slides, keep content")

@@ -59,9 +59,12 @@ python patch.py windows <local-file-or-URL> [-o out]
 python patch.py tv      <local-apk-or-URL>  [-o out]
 ```
 Known official URLs live in `patch.py`'s `CLIENTS` map (download via stdlib `urllib`, no deps).
-Pinned versions: **Android TV client v2.4.5, Windows client v3.1.5**.
+Pinned versions: **Android TV v2.4.5, Android mobile v1.7.8, Windows v3.1.5**.
 Windows (v3.1.5) `https://app.anybound.vip/static/iyf/爱壹帆_Setup_3.1.5.exe` (Chinese name is
-percent-encoded automatically); TV (v2.4.5) `https://app.anybound.vip/data/attachment/1-1779820631.apk`.
+percent-encoded automatically); TV (v2.4.5) `https://app.anybound.vip/data/attachment/1-1779820631.apk`;
+mobile (v1.7.8, `com.cqcsy.ifvod`) `https://app.anybound.vip/data/attachment/1-1777202801.apk`.
+The `mobile/` target reuses `tv/`'s engine + repackage; its model is `com.ppde.library.bean.UserInfoBean`
+and its video ads flow through `u9/c` (media3). Its ad/UI surfaces differ from TV — patch per its own anchors.
 
 Or call a client's sub-patcher directly:
 ```
@@ -158,6 +161,46 @@ The Settings window is **data-driven** from `globalconfig.js`, so a new checkbox
   run it directly in a normal shell.
 - **Verify equivalence** after a refactor: build old vs new and diff the extracted asar / decoded
   smali — they should be identical apart from cosmetic comment text.
+- **smali: `apktool b` passing ≠ it runs.** The assembler is lax; ART is strict. Prefer
+  **self-contained control flow** (own labels + registers dead at the injection point) over editing a
+  foreign method's loop — a `goto` back into an existing loop head can also trip the runtime verifier.
+- **RecyclerView: removing feed items can crash a *different*, later incremental update.** Symptom:
+  `StaggeredGridLayoutManager … LazySpanLookup.invalidateAfter` → `ArrayIndexOutOfBoundsException: -1`,
+  i.e. a `notifyItemRangeInserted(-1, …)`. This app's home feed has incremental loaders
+  (`util/b.c()`/`e()`) that **anchor-search the list** for a bean (a section `ItemTitleBean`/
+  `MovieModuleBean` by type) and return **-1** when not found. Some callers guard -1 (`U0` returns),
+  others don't (`getFollowingData$1` fired `notifyItemRangeInserted(-1,2)`). Removing a section (今日热点)
+  took out the anchor another loader searched for → -1 → crash — and it happened no matter WHERE the
+  removal was done (`util/b.d()` build, or `MultiTypeAdapter.h()` setItems). Lessons: (1) removing feed
+  data has non-local effects — grep every `util/b.c()/e()` (or indexOf-based) caller and confirm each
+  guards the not-found/-1 result before `notifyItemRange*`; add the guard where missing (mirror the
+  sibling that already guards). (2) still prefer filtering at the full-refresh choke (`h()` setItems →
+  `notifyDataSetChanged`) over a shared builder that also feeds incremental appends. Reference:
+  `22-feed-ads` (AdvertBean rows + 今日热点 `ItemTitleBean` section via a `dropping` state machine) +
+  `36-feed-following-guard` (the -1 guard) — both are needed together.
+- **Don't `finish()` a splash to "skip" it — it kills lifecycle-scoped init.** A splash often kicks
+  off async startup (global config / API-base / "backup server") whose callbacks are
+  `LiveData.observe(this, …)` bound to the splash's lifecycle. Jumping straight to the main screen by
+  calling the enter-app method + `finish()` in the splash's `onCreate` tears those observers down before
+  the async result returns, so the config never loads and every later request fails (symptoms:
+  login stuck on "初始化中…", home "加载失败了" — looks like "no server connection", not a crash).
+  To remove a splash **ad**, keep the splash alive and only neutralize the ad branch (e.g. replace the
+  ad-display call with the no-ad timer path), so init still completes. See
+  `mobile/patches/20-splash-ad` (replaces `A1(show ad)` with `t1()`), and the failed first attempt
+  documented there.
+- **A register is reused across a whole method — never clobber one with an injected `const`.** smali
+  reuses the same `vN` for unrelated values within one (often huge, R8-merged) method. Injecting e.g.
+  `const/4 v2, 0x0` to change one call's argument can silently corrupt a *later* use of `v2` in the same
+  method. Real case: a fragment's `M()` did both the SmartRefresh setup (`t0(v2)` with `v2=1`) and the
+  drakeet delegate registration further down, where `v2` was reused as an **array index**
+  (`aput WatchingDelegate, v10, v2`); forcing `v2=0` put the delegate at index 0 and left index 1 null →
+  `com.drakeet.multitype` NPE (null delegate) on `onResume`. Fix: to change one call's arg, point it at an
+  existing register that already holds the value you want (there `v1` was already `0` and stayed the
+  array's index-0), rather than mutating a live register. Before injecting a `const vN`, grep the rest of
+  the method for `vN` and confirm it's dead until its next write.
+- **New injected classes are fine** (`write(os.path.join(root,"smali_classes3/…/X.smali"), …)`;
+  `apktool b` compiles them, cross-dex refs resolve at runtime) — see `AutoSign`/`UiHide` in the
+  mobile patches. Keep helper methods `static` and give the class a no-arg `<init>` calling its super.
 
 ## Telemetry (audited)
 

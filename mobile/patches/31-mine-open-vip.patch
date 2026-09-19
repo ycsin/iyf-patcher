@@ -1,0 +1,48 @@
+# 「我的」页“开通VIP / 购买”入口，两处，都隐藏：
+#  ① 非会员提示图 notVipTip（LayoutMineBinding 字段 l，ImageView，点击 showVipTab 进开通页）：
+#     d0 的非会员分支把它设为 VISIBLE(v0)。这里改成 GONE —— 该处 v7 仍为 0x8(GONE)，直接借用。
+#     （已解锁VIP时它本就 GONE；这样各种状态下“开通VIP”提示都不出现。）
+#  ② 会员卡片 vipInfo（字段 w，LinearLayout）里的“立即续费”按钮：它是该卡片布局的最后一个子 View，
+#     无 id、点击 startBuySelf 进购买页。在卡片被设为可见之后，把它（最后一个子 View）设为 GONE，
+#     只留“至尊VIP + 永不到期”，不再显示购买按钮。
+#     d0 是 .locals 9 且 v8 全程未用（可借用）；隐藏时复用 v2（紧接着的 :goto_8 会立即重写 v2）。
+# 只改 MineFragment.smali。
+
+# ① notVipTip 恒隐藏：iget l 之后紧跟的 setVisibility(v0) -> setVisibility(v7=GONE)
+_l = re.compile(
+    r'(?ms)(iget-object v2, v2, Lcom/ppde/ppcd/databinding/LayoutMineBinding;->l:Landroid/widget/ImageView;\n'
+    r'(?:[ \t]*\n|[ \t]*\.line \d+\n)*'
+    r'    invoke-virtual \{v2, )v0(\}, Landroid/widget/ImageView;->setVisibility\(I\)V\n)')
+
+regex_patch(_l, lambda m: m.group(1) + "v7" + m.group(2),
+            need="->l:Landroid/widget/ImageView;",
+            only="smali*/com/ppde/ppcd/main/mine/MineFragment.smali",
+            label="mine notVipTip(开通VIP prompt) -> always GONE")
+
+# ② 隐藏整张“至尊VIP”会员卡片 vipInfo（字段 w）：d0 的会员分支把它设为 VISIBLE(v0)，
+#    在其后立刻把它设为 GONE —— 整块卡片（VIP 标识/到期/续费按钮）都不再显示。
+#    v8 在 d0 中全程未用（可借用）作 GONE 常量；v2 此处仍是卡片本身（View）。
+_w = re.compile(
+    r'(?ms)(iget-object v2, v2, Lcom/ppde/ppcd/databinding/LayoutMineBinding;->w:Landroid/widget/LinearLayout;\n'
+    r'(?:[ \t]*\n|[ \t]*\.line \d+\n)*'
+    r'    invoke-virtual \{v2, v0\}, Landroid/view/View;->setVisibility\(I\)V\n)')
+
+_hide_card = (
+    "\n"
+    "    const/16 v8, 0x8\n\n"
+    "    invoke-virtual {v2, v8}, Landroid/view/View;->setVisibility(I)V\n")
+
+regex_patch(_w, lambda m: m.group(1) + _hide_card,
+            need="->w:Landroid/widget/LinearLayout;",
+            only="smali*/com/ppde/ppcd/main/mine/MineFragment.smali",
+            label="mine 至尊VIP card (vipInfo) -> GONE (whole banner hidden)")
+
+# ③ 顺带把购买入口本身也失效：VIP 卡片 vipInfo 整块仍可点（android:onClick="startBuySelf"），
+#    点它会进购买页。把宿主 MainActivity.startBuySelf(View) 置空，点击卡片不再跳转购买。
+regex_patch(
+    re.compile(r'(?ms)^\.method public final startBuySelf\(Landroid/view/View;\)V\n.*?^\.end method[ \t]*$'),
+    lambda m: (".method public final startBuySelf(Landroid/view/View;)V\n"
+               "    .locals 0\n\n    return-void\n.end method"),
+    need="startBuySelf(Landroid/view/View;)V",
+    only="smali*/com/ppde/ppcd/main/MainActivity.smali",
+    label="MainActivity.startBuySelf -> no-op (mine VIP card tap won't open purchase)")

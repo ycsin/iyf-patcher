@@ -1,0 +1,31 @@
+# 「我的」页“个人服务”里的「广告中心」入口：该菜单是 GridView，标题来自 string-array
+# person_menu（getStringArray -> 可变 List v0），动作来自并行的整型列表（MineFragment 字段 c，
+# 每项是一个 action-id）。点击时 adapter 用 c.get(position).intValue() 做 sparse-switch 路由，
+# 所以“位置 i”同时对应 标题v0[i] 与 动作c[i]。App 自己在 bigVSwitch 关闭时就是从 v0 和 c 同删一个
+# 下标（大V认证）。这里照样处理：把「广告中心」从 v0 和 c 同一下标删掉 —— 菜单少一项、其余项的
+# 标题/路由仍然对齐。
+# 资源不重建（换 dex），所以不改 arrays.xml，而是运行时用 indexOf 定位后删除（与顺序/bigVSwitch 无关）。
+# 注入点：bigVSwitch 分支合流处 :cond_1（无条件执行）；此处 v0 仍是标题表，v1/v2 随后会被原代码重写，可借用。
+_pat = re.compile(r'(?ms)(const-string v2, "bigVSwitch"\n.*?:cond_1\n)')
+
+# 逐个把要删的标题从 v0(标题) 与 c(动作) 同下标删除；用 indexOf 定位，与顺序无关；各段用不同标签。
+def _remove_entry(title, label):
+    return (
+        "\n"
+        "    const-string v1, \"" + title + "\"\n\n"
+        "    invoke-interface {v0, v1}, Ljava/util/List;->indexOf(Ljava/lang/Object;)I\n\n"
+        "    move-result v1\n\n"
+        "    if-ltz v1, :" + label + "\n\n"
+        "    invoke-interface {v0, v1}, Ljava/util/List;->remove(I)Ljava/lang/Object;\n\n"
+        "    iget-object v2, p0, Lcom/ppde/ppcd/main/mine/MineFragment;->c:Ljava/util/ArrayList;\n\n"
+        "    invoke-virtual {v2, v1}, Ljava/util/ArrayList;->remove(I)Ljava/lang/Object;\n\n"
+        "    :" + label + "\n")
+
+_rm = (_remove_entry("广告中心", "vp_noad")
+       + _remove_entry("VIP开通记录", "vp_novipclr")
+       + _remove_entry("大V认证", "vp_nobigv"))
+
+regex_patch(_pat, lambda m: m.group(1) + _rm,
+            need="bigVSwitch",
+            only="smali*/com/ppde/ppcd/main/mine/MineFragment.smali",
+            label="mine 个人服务: remove 广告中心 + VIP开通记录 + 大V认证 entries (title+action aligned)")

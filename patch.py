@@ -26,6 +26,12 @@ CLIENTS = {
         "https://app.anybound.vip/data/attachment/1-1779820631.apk",  # 安卓电视/机顶盒 v2.4.5
         "安卓电视_2.4.5.apk",
     ),
+    "mobile": (
+        "安卓手机 客户端",
+        HERE / "mobile" / "patch.py",
+        "https://app.anybound.vip/data/attachment/1-1777202801.apk",  # 安卓手机 v1.7.8
+        "安卓手机_1.7.8.apk",
+    ),
     "windows": (
         "Windows 客户端",
         HERE / "windows" / "patch.py",
@@ -86,12 +92,14 @@ def choose_interactively():
     while True:
         print("选择要打补丁的客户端：")
         print("  1) 安卓电视/机顶盒 客户端")
-        print("  2) Windows 客户端")
+        print("  2) 安卓手机 客户端")
+        print("  3) Windows 客户端")
         print("  0) 退出")
         sel = input("> ").strip().lower()
         if sel in ("0", "q", "quit", "exit"):
             return None
-        client = {"1": "tv", "tv": "tv", "2": "windows", "windows": "windows"}.get(sel)
+        client = {"1": "tv", "tv": "tv", "2": "mobile", "mobile": "mobile",
+                  "3": "windows", "windows": "windows"}.get(sel)
         if not client:
             print("!! 无效选择\n")
             continue

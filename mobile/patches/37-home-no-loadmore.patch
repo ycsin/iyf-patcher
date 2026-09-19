@@ -1,0 +1,18 @@
+# 首页底部“精彩内容即将呈现…”加载器：SmartRefreshLayout 上拉加载更多页脚（RefreshFooter/refresh_tip），
+# 加载的是已被 34 移除的「为你推荐」下一页，故一直挂着。用户选择关掉加载更多。
+#
+# RecommendFragment.M() 里：const/4 v1,0x0；const/4 v2,0x1；u0(v2)=setEnableRefresh；t0(v2)=setEnableLoadMore。
+# ⚠️ 关键：同一个 M() 后面把 v2 当作 util/c 一对多注册的“第二个委托的数组下标”用：
+#     new-array v10, v4(=2); aput j9/d, v10, v1(=0); aput WatchingDelegate, v10, v2(=1)。
+#   所以绝不能改动 v2（早前注入 `const/4 v2,0x0` 会把 WatchingDelegate 写到下标 0、下标 1 变 null →
+#   drakeet 注册收到 null 委托 → onResume 崩溃）。
+#
+# 安全做法：不碰 v2，改成让 t0 读 v1（此处 v1 恒为 0，且它就是数组下标 0，直到注册处都不变）：
+#   t0(v1=0) == setEnableLoadMore(false)，v1 仍是 0（注册数组下标 0 不受影响），v2 保持 1（下标 1 正确）。
+regex_patch(
+    re.compile(
+        r'(invoke-virtual \{p0, )v2(\}, Lcom/ppde/library/base/refresh/RefreshFragment;->t0\(Z\)V)'),
+    lambda m: m.group(1) + "v1" + m.group(2),
+    need="->t0(Z)V",
+    only="smali*/com/ppde/ppcd/main/home/RecommendFragment.smali",
+    label="home: t0(v1=0) -> setEnableLoadMore(false), no 精彩内容即将呈现 footer (v2 untouched)")

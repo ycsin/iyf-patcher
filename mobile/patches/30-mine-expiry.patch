@@ -1,0 +1,13 @@
+# 「我的」页 VIP 卡片的到期时间：vipTime（LayoutMineBinding 字段 y，TextView）原本用
+# getEDate() 格式化成 "%1$s到期"（string 0x7f1305b1）显示。已解锁至尊VIP，这里显示为“永不到期”。
+# 资源不参与重建（流程是换 dex，不重建 res），所以不改 strings.xml，而是在 setText 之前
+# 把已算好的字符串寄存器 v5 覆盖成字面量“永不到期”。锚点是唯一出现的 vipDate 字符串 id。
+_pat = re.compile(
+    r'(?ms)(const v5, 0x7f1305b1\n'
+    r'.*?getString\(I\[Ljava/lang/Object;\)Ljava/lang/String;\n'
+    r'.*?move-result-object v5\n)')
+
+regex_patch(_pat, lambda m: m.group(1) + "\n    const-string v5, \"永不到期\"\n",
+            need="0x7f1305b1",
+            only="smali*/com/ppde/ppcd/main/mine/MineFragment.smali",
+            label="mine VIP expiry -> 永不到期")

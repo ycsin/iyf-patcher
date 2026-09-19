@@ -1,0 +1,18 @@
+# 视频详情页里“点赞/评论”按钮上方的广告横幅：是一个 com.youth.banner.Banner<AdvertBean>
+# （LayoutIntroductionBinding->b），由 VideoIntroductionFragment.I0(List<AdvertBean>) 填充。
+# I0 里已有分支：列表为空 -> 把 Banner(b) 和它的占位 Space(c, "adBannerSpace") 都设为 GONE
+# （即 App 自带的“无广告”布局，不留空隙）。所以在方法入口把入参替换成空 ArrayList，直接走空分支，
+# 横幅与占位一起隐藏。复用官方隐藏逻辑，最稳妥、无残留间距。
+_pat = re.compile(
+    r'(?ms)^(\.method private final I0\(Ljava/util/List;\)V\n'
+    r'.*?    \.locals \d+\n)')
+
+def _repl(m):
+    return (m.group(1) +
+            "\n    new-instance p1, Ljava/util/ArrayList;\n"
+            "\n    invoke-direct {p1}, Ljava/util/ArrayList;-><init>()V\n")
+
+regex_patch(_pat, _repl,
+            need="I0(Ljava/util/List;)V",
+            only="smali*/com/ppde/ppcd/video/fragment/VideoIntroductionFragment.smali",
+            label="detail-page ad banner I0(list) -> forced empty (banner+spacer hidden)")

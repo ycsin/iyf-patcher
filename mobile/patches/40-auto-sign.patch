@@ -1,0 +1,84 @@
+# 启动自动签到（静默，等价于 Windows 客户端“直接发一个 HTTP 请求”）：
+# 点“签到”按钮时 SignGetGiftActivity.k2() 是通过 App 自己的网络层发起签到：
+#   network.d.i(d, url=base.b.q1(), 回调=o8/b, params=null, tag, 4, null)
+# 网络层会自动带上 token/签名等鉴权头（含我们伪造的 verifytrust 哈希），所以不能裸发请求，
+# 必须走这一层。唯一与界面绑定的只是那个回调（o8/b 的子类，会更新签到页 UI）。
+#
+# 做法：新增一个自带类 com.ppde.ppcd.patch.AutoSign —— 它既是 o8/b 的“空回调”（onError/onSuccess 都 no-op，
+# 不依赖任何 Activity），又提供静态 fire() 复刻 k2() 的那次请求；然后在 MainActivity.onCreate 末尾
+# 调用一次 AutoSign.fire()。每次启动静默签到（服务端对“今日已签”幂等；未登录时请求被拒，无副作用）。
+# 新类写进 smali_classes3（apktool b 会一并编译；跨 dex 引用 o8/b、network/d、base/b 运行时由多 dex 解析）。
+
+_smali = """.class public final Lcom/ppde/ppcd/patch/AutoSign;
+.super Lo8/b;
+.source "AutoSign"
+
+
+# direct methods
+.method public constructor <init>()V
+    .locals 0
+
+    invoke-direct {p0}, Lo8/b;-><init>()V
+
+    return-void
+.end method
+
+.method public static fire()V
+    .locals 7
+
+    sget-object v0, Lcom/ppde/library/network/d;->a:Lcom/ppde/library/network/d;
+
+    sget-object v1, Lcom/ppde/ppcd/base/b;->a:Lcom/ppde/ppcd/base/b;
+
+    invoke-virtual {v1}, Lcom/ppde/ppcd/base/b;->q1()Ljava/lang/String;
+
+    move-result-object v1
+
+    new-instance v2, Lcom/ppde/ppcd/patch/AutoSign;
+
+    invoke-direct {v2}, Lcom/ppde/ppcd/patch/AutoSign;-><init>()V
+
+    const/4 v3, 0x0
+
+    const-string v4, "auto_sign"
+
+    const/4 v5, 0x4
+
+    const/4 v6, 0x0
+
+    invoke-static/range {v0 .. v6}, Lcom/ppde/library/network/d;->i(Lcom/ppde/library/network/d;Ljava/lang/String;Lo8/b;Lcom/lzy/okgo/model/HttpParams;Ljava/lang/String;ILjava/lang/Object;)V
+
+    return-void
+.end method
+
+
+# virtual methods (o8/b abstract -> no-op)
+.method public a(Ljava/lang/String;Ljava/lang/String;)V
+    .locals 0
+
+    return-void
+.end method
+
+.method public c(Ljava/lang/Object;)V
+    .locals 0
+
+    return-void
+.end method
+"""
+
+_dir = os.path.join(root, "smali_classes3", "com", "ppde", "ppcd", "patch")
+os.makedirs(_dir, exist_ok=True)
+write(os.path.join(_dir, "AutoSign.smali"), _smali)
+print("[ok] smali_classes3/com/ppde/ppcd/patch/AutoSign.smali: created (silent auto-签到 helper) x1")
+
+# 在 MainActivity.onCreate 末尾（最后一处 setOnApplyWindowInsetsListener 之后、return-void 之前）注入 fire()
+_pat = re.compile(
+    r'(?ms)(invoke-static \{[pv]\d+, [pv]\d+\}, Landroidx/core/view/ViewCompat;->setOnApplyWindowInsetsListener'
+    r'\(Landroid/view/View;Landroidx/core/view/OnApplyWindowInsetsListener;\)V\n'
+    r'.*?)(    return-void\n)')
+
+regex_patch(_pat,
+    lambda m: m.group(1) + "\n    invoke-static {}, Lcom/ppde/ppcd/patch/AutoSign;->fire()V\n\n" + m.group(2),
+    need="setOnApplyWindowInsetsListener",
+    only="smali*/com/ppde/ppcd/main/MainActivity.smali",
+    label="MainActivity.onCreate -> fire silent auto-签到 on launch")

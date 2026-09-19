@@ -1,0 +1,27 @@
+# 弹幕广告：弹幕用快手 akdanmaku 渲染。每条弹幕 BarrageBean 由 danmaku/e.h(I,BarrageBean) 转成
+# DanmakuItemData —— isAdvert()==true 的会被做成带头像/按钮、点击进 advertLinkUrl 的“广告弹幕”。
+# 转换+入队都在协程 e$f.invokeSuspend 的循环里：遍历 List<BarrageBean> -> a()/h() 转换 -> 加进
+# 结果表 -> DanmakuPlayer.updateData()。h() 是唯一的转换出口，且只被 e$f 调用，所以在这里过滤即可
+# 覆盖初始批量与实时（socket）两种来源。
+#
+# 做法：在循环里 check-cast 出 BarrageBean(v3) 之后、真正转换之前，判 isAdvert()：是广告就
+# `move v1, v2`（推进下标，v2 此前已算好=下标+1）+ goto 回到循环头，跳过这条 —— 广告弹幕不入队、
+# 不渲染，真实弹幕照常。add 处无 null 判断，所以只能“跳过整条”，不能让 h() 返回 null。
+# 借用 v4 存 isAdvert 结果：keep 分支处原代码紧接着就把 v4 重新赋成 this$0，安全。
+_pat = re.compile(
+    r'(?ms)(check-cast v3, Lcom/ppde/ppcd/bean/BarrageBean;\n)'
+    r'(.*?iget-object v4, p0, Lcom/ppde/ppcd/video/danmaku/e\$f;->this\$0:Lcom/ppde/ppcd/video/danmaku/e;\n)')
+
+_skip = (
+    "\n"
+    "    invoke-virtual {v3}, Lcom/ppde/ppcd/bean/BarrageBean;->isAdvert()Z\n\n"
+    "    move-result v4\n\n"
+    "    if-eqz v4, :vp_keep\n\n"
+    "    move v1, v2\n\n"
+    "    goto :goto_0\n\n"
+    "    :vp_keep\n")
+
+regex_patch(_pat, lambda m: m.group(1) + _skip + m.group(2),
+            need="Lcom/ppde/ppcd/bean/BarrageBean;",
+            only="smali*/com/ppde/ppcd/video/danmaku/e$f.smali",
+            label="danmu: skip isAdvert BarrageBean before render (no ad danmaku)")

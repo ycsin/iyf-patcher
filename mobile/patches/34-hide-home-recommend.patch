@@ -1,0 +1,9 @@
+# 首页“为你推荐”板块：由 RecommendFragment.S0() 这个加载器发起网络请求（getRecommendedData），
+# 其回调 getRecommendedData$1 会 new 一个 ItemTitleBean(标题=“为你推荐”, string 0x7f130446) 加进
+# 信息流列表，再 addAll 内容。S0() 专用于这个板块，直接置空即可 —— 不再拉取、不再拼装该板块。
+regex_patch(
+    re.compile(r'(?ms)^\.method private final S0\(\)V\n.*?^\.end method[ \t]*$'),
+    lambda m: ".method private final S0()V\n    .locals 0\n\n    return-void\n.end method",
+    need="S0()V",
+    only="smali*/com/ppde/ppcd/main/home/RecommendFragment.smali",
+    label="RecommendFragment.S0() -> no-op (remove 首页 为你推荐 section)")
