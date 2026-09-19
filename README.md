@@ -25,6 +25,8 @@ iyf/
 
 ## 使用方法
 
+https://github.com/user-attachments/assets/5ce18588-ed36-4b4c-b49e-4473e4112bab
+
 **统一入口 `patch.py`**（在 Linux / macOS 上运行）—— 选择客户端、可直接从官方地址下载再打补丁。
 官方版本：**安卓电视/机顶盒客户端 v2.4.5，安卓手机客户端 v1.7.8，Windows 客户端 v3.1.5**。
 
